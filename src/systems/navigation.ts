@@ -1,6 +1,12 @@
 import type { Point } from "../core/types";
 import type { Overworld } from "../maps/overworld";
+import { aStar } from "./astar";
 import { canEnterOverworldTile } from "./rules";
+
+export type OverworldNavOptions = {
+  preferRoads: boolean;
+  maxNodes: number;
+};
 
 export function findNearestOverworldTile(
   overworld: Overworld,
@@ -28,6 +34,36 @@ export function findNearestOverworldTile(
   }
 
   return undefined;
+}
+
+export function findOverworldPath(
+  overworld: Overworld,
+  from: Point,
+  to: Point,
+  options: OverworldNavOptions,
+): Point[] | undefined {
+  const cost = (p: Point): number => {
+    if (!options.preferRoads) return 1;
+    const tile: string = overworld.getTile(p.x, p.y);
+    if (tile === "road") return 0.35;
+    if (tile === "grass") return 1.0;
+    if (tile === "forest") return 1.4;
+    if (tile === "mountain") return 9999;
+    if (tile === "water") return 9999;
+    // towns/dungeons should be reachable, treat like grass
+    return 1.0;
+  };
+
+  const path = aStar(
+    from,
+    to,
+    (p: Point) => canEnterOverworldTile(overworld, p),
+    (_p: Point) => false,
+    options.maxNodes,
+    cost
+  );
+
+  return path ?? undefined;
 }
 
 export function canvasClickToWorldPoint(
