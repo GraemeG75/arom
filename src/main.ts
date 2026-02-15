@@ -10,7 +10,7 @@ import { nextMonsterStep } from "./systems/ai";
 import { renderAscii } from "./render/ascii";
 import { CanvasRenderer } from "./render/canvas";
 import { MessageLog } from "./ui/log";
-import { loadFromLocalStorage, saveToLocalStorage, type SaveDataV2 } from "./core/save";
+import { loadFromLocalStorage, saveToLocalStorage, type SaveDataV3 } from "./core/save";
 import { renderPanelHtml, type PanelMode } from "./ui/panel";
 import { hash2D } from "./core/hash";
 
@@ -43,6 +43,10 @@ type GameState = {
   useFov: boolean;
 
   activePanel: PanelMode;
+  shopCategory: "all" | "potion" | "weapon" | "armor";
+
+  turnCounter: number;
+  quests: import("./core/types").Quest[];
 
   log: MessageLog;
 };
@@ -88,7 +92,8 @@ function newGame(worldSeed: number): GameState {
     xp: 0,
     gold: 20,
     inventory: [],
-    equipment: {}
+    equipment: {},
+    statusEffects: []
   };
 
   const state: GameState = {
@@ -105,11 +110,14 @@ function newGame(worldSeed: number): GameState {
     rendererMode: "ascii",
     useFov: true,
     activePanel: "none",
+    shopCategory: "all",
+    turnCounter: 0,
+    quests: [],
     log: new MessageLog(160)
   };
 
   state.log.push("Welcome. Find a town (T) to shop or a dungeon (D) to descend.");
-  state.log.push("I inventory • B shop (when standing on T) • G pick up items in dungeons.");
+  state.log.push("I inventory • B shop (town) • Q quests (town) • G pick up items in dungeons.");
   state.log.push("P save • O load • R renderer • F FOV");
   return state;
 }
@@ -218,7 +226,8 @@ function createMonsterForDepth(depth: number, roll: number, rng: Rng, dungeonId:
     xp: 0,
     gold: 0,
     inventory: [],
-    equipment: {}
+    equipment: {},
+    statusEffects: []
   };
 }
 
@@ -265,6 +274,136 @@ function spawnLootInDungeon(s: GameState, dungeon: Dungeon, seed: number): void 
 
     s.items.push(item);
   }
+}
+
+function getActiveTownId(): string | undefined {
+  if (state.mode !== "overworld") return undefined;
+  const t = state.overworld.getTile(state.player.pos.x, state.player.pos.y);
+  if (t !== "town") return undefined;
+  return townIdFromWorldPos(state.worldSeed, state.player.pos.x, state.player.pos.y);
+}
+
+function ensureQuestForTown(s: GameState, townPos: Point): void {
+  const townId: string = townIdFromWorldPos(s.worldSeed, townPos.x, townPos.y);
+
+  // If we already have quests for this town, do nothing.
+  if (s.quests.some((q) => q.townId === townId)) return;
+
+  // Generate 1-2 quests deterministically from seed + town coords.
+  const seed: number = hash2D(s.worldSeed, townPos.x, townPos.y) ^ 0xA11CE;
+  const rng: Rng = new Rng(seed);
+
+  const questCount: number = 1 + rng.nextInt(0, 2);
+  for (let i: number = 0; i < questCount; i++) {
+    const minDepth: number = 1 + rng.nextInt(0, 4);
+    const targetCount: number = 6 + rng.nextInt(0, 8);
+    const rewardGold: number = 20 + minDepth * 10 + rng.nextInt(0, 10);
+    const rewardXp: number = 18 + minDepth * 8 + rng.nextInt(0, 10);
+
+    const q: import("./core/types").Quest = {
+      id: `q_${townId}_${i}`,
+      townId,
+      kind: "killMonsters",
+      description: `Clear threats: defeat ${targetCount} monsters (depth ≥ ${minDepth})`,
+      targetCount,
+      currentCount: 0,
+      minDungeonDepth: minDepth,
+      rewardGold,
+      rewardXp,
+      completed: false,
+      turnedIn: false
+    };
+
+    s.quests.push(q);
+  }
+}
+
+function recordKillForQuests(s: GameState, dungeonDepth: number): void {
+  for (const q of s.quests) {
+    if (q.kind !== "killMonsters") continue;
+    if (q.completed || q.turnedIn) continue;
+    if (dungeonDepth < q.minDungeonDepth) continue;
+
+    q.currentCount += 1;
+    if (q.currentCount >= q.targetCount) {
+      q.currentCount = q.targetCount;
+      q.completed = true;
+      s.log.push(`Quest complete: ${q.description}. Return to town to turn in (Q).`);
+    }
+  }
+}
+
+function applyStatusEffectsStartOfTurn(s: GameState): void {
+  const effects = s.player.statusEffects ?? [];
+  if (effects.length === 0) return;
+
+  for (const eff of effects) {
+    if (eff.kind === "poison") {
+      s.player.hp -= eff.potency;
+      s.log.push(`Poison deals ${eff.potency} damage. (${Math.max(0, s.player.hp)}/${s.player.maxHp})`);
+    }
+    eff.remainingTurns -= 1;
+  }
+
+  s.player.statusEffects = effects.filter((e) => e.remainingTurns > 0);
+
+  if (s.player.hp <= 0) {
+    s.log.push("You succumb to your wounds.");
+  }
+}
+
+function maybeApplyPoisonFromAttacker(attacker: Entity): void {
+  // Slimes have a chance to poison.
+  if (attacker.name !== "Slime") return;
+  const roll: number = state.rng.nextInt(0, 100);
+  if (roll >= 20) return;
+
+  const effects = state.player.statusEffects ?? [];
+  const existing = effects.find((e) => e.kind === "poison");
+  if (existing) {
+    existing.remainingTurns = Math.max(existing.remainingTurns, 5);
+    existing.potency = Math.max(existing.potency, 1);
+  } else {
+    effects.push({ kind: "poison", remainingTurns: 5, potency: 1 });
+  }
+  state.player.statusEffects = effects;
+  state.log.push("You are poisoned!");
+}
+
+function maybeRestockShop(s: GameState, shop: Shop): void {
+  // Restock every 80 turns (simple timer) - deterministic but time-based.
+  const restockInterval: number = 80;
+  const needsRestock: boolean = (s.turnCounter % restockInterval) === 0;
+
+  if (!needsRestock) return;
+
+  const seed: number = hash2D(s.worldSeed, shop.townWorldPos.x, shop.townWorldPos.y) ^ (Math.floor(s.turnCounter / restockInterval) * 0x9e3779b9);
+  const rng: Rng = new Rng(seed);
+
+  // Replace stock item definitions (remove old ones first)
+  const oldIds: Set<string> = new Set<string>(shop.stockItemIds);
+  s.items = s.items.filter((it) => !oldIds.has(it.id));
+
+  const stock: string[] = [];
+  for (let i: number = 0; i < 10; i++) {
+    const roll: number = rng.nextInt(0, 100);
+    const itemId: string = `shop_${shop.id}_${Math.floor(s.turnCounter / restockInterval)}_${i}`;
+
+    let item: Item;
+    if (roll < 45) {
+      item = { id: itemId, kind: "potion", name: "Healing Potion", healAmount: 10, value: 14 };
+    } else if (roll < 75) {
+      item = { id: itemId, kind: "weapon", name: "Steel Dagger", attackBonus: 3, value: 30 };
+    } else {
+      item = { id: itemId, kind: "armor", name: "Padded Vest", defenseBonus: 2, value: 28 };
+    }
+
+    s.items.push(item);
+    stock.push(itemId);
+  }
+
+  shop.stockItemIds = stock;
+  s.log.push("The shop has new stock.");
 }
 
 function ensureShopForTown(s: GameState, townPos: Point): Shop {
@@ -338,6 +477,20 @@ function handleAction(action: Action): void {
     state.activePanel = state.activePanel === "shop" ? "none" : "shop";
     if (state.activePanel === "shop" && isStandingOnTown()) {
       ensureShopForTown(state, state.player.pos);
+      ensureQuestForTown(state, state.player.pos);
+      const shopNow: Shop = ensureShopForTown(state, state.player.pos);
+      maybeRestockShop(state, shopNow);
+    }
+    render();
+    return;
+  }
+
+  if (action.kind === "toggleQuest") {
+    state.activePanel = state.activePanel === "quest" ? "none" : "quest";
+    if (state.activePanel === "quest" && isStandingOnTown()) {
+      ensureQuestForTown(state, state.player.pos);
+      const shopNow: Shop = ensureShopForTown(state, state.player.pos);
+      maybeRestockShop(state, shopNow);
     }
     render();
     return;
@@ -361,6 +514,11 @@ function handleAction(action: Action): void {
     render();
     return;
   }
+
+  // Turn-based effects tick at the start of each action that advances time.
+  state.turnCounter += 1;
+  applyStatusEffectsStartOfTurn(state);
+  if (state.player.hp <= 0) { render(); return; }
 
   const acted: boolean = playerTurn(action);
   if (!acted) {
@@ -533,6 +691,9 @@ function attack(attacker: Entity, defender: Entity): void {
       state.player.gold += gold;
       state.log.push(`You gain ${xp} XP and loot ${gold} gold.`);
       awardXp(xp);
+
+      const currentDepth: number = state.dungeonStack[state.dungeonStack.length - 1]?.depth ?? 0;
+      recordKillForQuests(state, currentDepth);
     }
   }
 }
@@ -558,7 +719,11 @@ function monstersTurn(): void {
 
     const dist: number = manhattan(e.pos, state.player.pos);
     if (dist <= 1) {
+      const hpBefore: number = state.player.hp;
       attack(e, state.player);
+      if (state.player.hp < hpBefore && state.player.hp > 0) {
+        maybeApplyPoisonFromAttacker(e);
+      }
       continue;
     }
 
@@ -654,16 +819,25 @@ function render(): void {
     <div class="kv"><div><b>${escapeHtml(state.player.name)}</b> <span class="muted">Lvl ${state.player.level}</span></div><div>HP ${state.player.hp}/${state.player.maxHp}</div></div>
     <div class="kv small"><div>Atk ${atk}</div><div>Def ${def}</div></div>
     <div class="kv small"><div>XP ${state.player.xp}/${xpToNextLevel(state.player.level)}</div><div>Gold ${state.player.gold}</div></div>
-    <div class="kv small"><div>Pos ${state.player.pos.x}, ${state.player.pos.y}</div><div class="muted">Seed ${state.worldSeed}</div></div>
+    <div class="kv small"><div>Pos ${state.player.pos.x}, ${state.player.pos.y}</div><div class="muted">Turn ${state.turnCounter}</div></div>
+    <div class="kv small"><div class="muted">Status ${(state.player.statusEffects ?? []).map((e) => e.kind + ":" + e.remainingTurns).join(", ") || "none"}</div><div class="muted">Seed ${state.worldSeed}</div></div>
   `;
 
   const activeShop: Shop | undefined = isStandingOnTown() ? ensureShopForTown(state, state.player.pos) : undefined;
+  if (activeShop) {
+    ensureQuestForTown(state, state.player.pos);
+    maybeRestockShop(state, activeShop);
+  }
+  const activeTownId: string | undefined = getActiveTownId();
   panelEl.innerHTML = renderPanelHtml({
     mode: state.activePanel,
     player: state.player,
     items: state.items,
     activeShop,
-    canShop: isStandingOnTown()
+    canShop: isStandingOnTown(),
+    quests: state.quests,
+    activeTownId,
+    shopCategory: state.shopCategory
   });
 
   logEl.innerHTML = state.log.all().slice(0, 160).map((m) => `<div>• ${escapeHtml(m.text)}</div>`).join("");
@@ -697,35 +871,57 @@ panelEl.addEventListener("click", (e: MouseEvent) => {
   if (!target) return;
   const act: string | null = target.getAttribute("data-act");
   const itemId: string | null = target.getAttribute("data-item");
-  if (!act || !itemId) return;
+  const questId: string | null = target.getAttribute("data-quest");
+  if (!act) return;
 
   if (act === "use") {
+    if (!itemId) return;
     usePotion(itemId);
     render();
     return;
   }
   if (act === "equipWeapon") {
+    if (!itemId) return;
     equipWeapon(itemId);
     render();
     return;
   }
   if (act === "equipArmor") {
+    if (!itemId) return;
     equipArmor(itemId);
     render();
     return;
   }
   if (act === "drop") {
+    if (!itemId) return;
     dropItem(itemId);
     render();
     return;
   }
   if (act === "buy") {
+    if (!itemId) return;
     buyItem(itemId);
     render();
     return;
   }
   if (act === "sell") {
+    if (!itemId) return;
     sellItem(itemId);
+    render();
+    return;
+  }
+  if (act === "shopCat") {
+    const cat: string | null = target.getAttribute("data-cat");
+    if (cat === "all" || cat === "potion" || cat === "weapon" || cat === "armor") {
+      state.shopCategory = cat;
+    }
+    render();
+    return;
+  }
+  if (act === "turnIn") {
+    if (questId) {
+      turnInQuest(questId);
+    }
     render();
     return;
   }
@@ -826,6 +1022,31 @@ function sellItem(itemId: string): void {
   state.log.push(`Sold: ${it.name} for ${price}g.`);
 }
 
+function turnInQuest(questId: string): void {
+  const townId: string | undefined = getActiveTownId();
+  if (!townId) {
+    state.log.push("You need to be in town to turn in quests.");
+    return;
+  }
+
+  const q = state.quests.find((x) => x.id === questId);
+  if (!q) return;
+  if (q.townId !== townId) {
+    state.log.push("That quest belongs to another town.");
+    return;
+  }
+  if (q.turnedIn) return;
+  if (!q.completed) {
+    state.log.push("Quest is not complete yet.");
+    return;
+  }
+
+  q.turnedIn = true;
+  state.player.gold += q.rewardGold;
+  awardXp(q.rewardXp);
+  state.log.push(`Quest turned in! +${q.rewardGold}g and +${q.rewardXp} XP.`);
+}
+
 function escapeHtml(s: string): string {
   return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
@@ -840,6 +1061,7 @@ function keyToAction(e: KeyboardEvent): Action | undefined {
 
   if (e.key === "i" || e.key === "I") return { kind: "toggleInventory" };
   if (e.key === "b" || e.key === "B") return { kind: "toggleShop" };
+  if (e.key === "q" || e.key === "Q") return { kind: "toggleQuest" };
 
   if (e.key === "g" || e.key === "G" || e.key === ",") return { kind: "pickup" };
 
@@ -889,8 +1111,8 @@ function doSave(): void {
   const dungeons: Dungeon[] = [...state.dungeons.values()];
   const shops: Shop[] = [...state.shops.values()];
 
-  const data: SaveDataV2 = {
-    version: 2,
+  const data: SaveDataV3 = {
+    version: 3,
     worldSeed: state.worldSeed,
     mode: state.mode,
     playerId: state.player.id,
@@ -899,7 +1121,9 @@ function doSave(): void {
     dungeons,
     shops,
     entranceReturnPos: state.dungeonStack[0]?.entranceWorldPos,
-    activePanel: state.activePanel
+    activePanel: state.activePanel,
+    turnCounter: state.turnCounter,
+    quests: state.quests
   };
 
   saveToLocalStorage(data);
@@ -907,7 +1131,7 @@ function doSave(): void {
 }
 
 function doLoad(): void {
-  const data: SaveDataV2 | undefined = loadFromLocalStorage();
+  const data: SaveDataV3 | undefined = loadFromLocalStorage();
   if (!data) {
     state.log.push("No save found.");
     return;
@@ -923,6 +1147,7 @@ function doLoad(): void {
   for (const s of data.shops) shopsMap.set(s.id, s);
 
   const player: Entity | undefined = data.entities.find((e) => e.id === data.playerId);
+  if (player && !player.statusEffects) player.statusEffects = [];
   if (!player) {
     state.log.push("Save missing player.");
     return;
@@ -941,7 +1166,10 @@ function doLoad(): void {
     shops: shopsMap,
     rendererMode: state.rendererMode,
     useFov: state.useFov,
-    activePanel: data.activePanel ?? "none",
+    activePanel: (data.activePanel as PanelMode) ?? "none",
+    shopCategory: "all",
+    turnCounter: data.turnCounter ?? 0,
+    quests: data.quests ?? [],
     log: new MessageLog(160)
   };
 

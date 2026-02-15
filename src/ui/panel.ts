@@ -1,6 +1,6 @@
 import type { Entity, Item, Shop } from "../core/types";
 
-export type PanelMode = "none" | "inventory" | "shop";
+export type PanelMode = "none" | "inventory" | "shop" | "quest";
 
 export type PanelContext = {
   mode: PanelMode;
@@ -8,12 +8,16 @@ export type PanelContext = {
   items: Item[];
   activeShop?: Shop;
   canShop: boolean;
+  quests: import("../core/types").Quest[];
+  activeTownId?: string;
+  shopCategory: "all" | "potion" | "weapon" | "armor";
 };
 
 export function renderPanelHtml(ctx: PanelContext): string {
   if (ctx.mode === "inventory") return renderInventory(ctx.player, ctx.items);
-  if (ctx.mode === "shop") return renderShop(ctx.player, ctx.items, ctx.activeShop, ctx.canShop);
-  return `<div class="small muted">Panels: <b>I</b> inventory • <b>B</b> shop (in town)</div>`;
+  if (ctx.mode === "shop") return renderShop(ctx.player, ctx.items, ctx.activeShop, ctx.canShop, ctx.shopCategory);
+  if (ctx.mode === "quest") return renderQuestLog(ctx.quests, ctx.activeTownId);
+  return `<div class="small muted">Panels: <b>I</b> inventory • <b>B</b> shop (in town) • <b>Q</b> quests (in town)</div>`;
 }
 
 function renderInventory(player: Entity, items: Item[]): string {
@@ -48,8 +52,22 @@ function renderInventory(player: Entity, items: Item[]): string {
     const actions: string[] = [];
 
     if (it.kind === "potion") actions.push(`<button class="btnTiny" data-act="use" data-item="${it.id}">Use</button>`);
-    if (it.kind === "weapon") actions.push(`<button class="btnTiny" data-act="equipWeapon" data-item="${it.id}">Equip</button>`);
-    if (it.kind === "armor") actions.push(`<button class="btnTiny" data-act="equipArmor" data-item="${it.id}">Equip</button>`);
+if (it.kind === "weapon") {
+  const currentWeaponId: string | undefined = player.equipment.weaponItemId;
+  const currentWeapon = currentWeaponId ? items.find((x) => x.id === currentWeaponId) : undefined;
+  const curAtk: number = currentWeapon?.attackBonus ?? 0;
+  const newAtk: number = it.attackBonus ?? 0;
+  const delta: number = newAtk - curAtk;
+  actions.push(`<button class="btnTiny" data-act="equipWeapon" data-item="${it.id}">Equip ${delta === 0 ? "" : (delta > 0 ? "(+" + delta + ")" : "(" + delta + ")")}</button>`);
+}
+if (it.kind === "armor") {
+  const currentArmorId: string | undefined = player.equipment.armorItemId;
+  const currentArmor = currentArmorId ? items.find((x) => x.id === currentArmorId) : undefined;
+  const curDef: number = currentArmor?.defenseBonus ?? 0;
+  const newDef: number = it.defenseBonus ?? 0;
+  const delta: number = newDef - curDef;
+  actions.push(`<button class="btnTiny" data-act="equipArmor" data-item="${it.id}">Equip ${delta === 0 ? "" : (delta > 0 ? "(+" + delta + ")" : "(" + delta + ")")}</button>`);
+}
 
     actions.push(`<button class="btnTiny" data-act="drop" data-item="${it.id}">Drop</button>`);
 
@@ -61,7 +79,7 @@ function renderInventory(player: Entity, items: Item[]): string {
   return lines.join("");
 }
 
-function renderShop(player: Entity, items: Item[], shop: Shop | undefined, canShop: boolean): string {
+function renderShop(player: Entity, items: Item[], shop: Shop | undefined, canShop: boolean, category: "all" | "potion" | "weapon" | "armor"): string {
   const lines: string[] = [];
   lines.push(`<div class="panelTitle"><b>Town Shop</b><span class="tag">B to close</span></div>`);
 
@@ -75,14 +93,21 @@ function renderShop(player: Entity, items: Item[], shop: Shop | undefined, canSh
     return lines.join("");
   }
 
-  lines.push(`<div class="small">Gold: <b>${player.gold}</b></div>`);
-  lines.push(`<div class="sep"></div>`);
-  lines.push(`<div class="small muted">Buy</div>`);
+lines.push(`<div class="small">Gold: <b>${player.gold}</b></div>`);
+lines.push(`<div class="row" style="margin-top:6px;">` +
+  `<button class="btnTiny" data-act="shopCat" data-cat="all">All</button>` +
+  `<button class="btnTiny" data-act="shopCat" data-cat="potion">Potions</button>` +
+  `<button class="btnTiny" data-act="shopCat" data-cat="weapon">Weapons</button>` +
+  `<button class="btnTiny" data-act="shopCat" data-cat="armor">Armor</button>` +
+`</div>`);
+lines.push(`<div class="sep"></div>`);
+lines.push(`<div class="small muted">Buy</div>`);
   lines.push(`<div class="grid">`);
 
   for (const id of shop.stockItemIds.slice(0, 40)) {
     const it: Item | undefined = items.find((x) => x.id === id);
     if (!it) continue;
+    if (category !== "all" && it.kind !== category) continue;
 
     const price: number = it.value;
     const extra: string =

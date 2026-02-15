@@ -34,6 +34,8 @@ export type Entity = {
 
   inventory: string[]; // item ids
   equipment: Equipment;
+
+  statusEffects?: StatusEffect[];
 };
 
 export type ItemKind = "potion" | "weapon" | "armor";
@@ -69,6 +71,7 @@ export type Action =
   | { kind: "pickup" }
   | { kind: "toggleInventory" }
   | { kind: "toggleShop" }
+  | { kind: "toggleQuest" }
   | { kind: "toggleRenderer" }
   | { kind: "toggleFov" }
   | { kind: "help" }
@@ -79,5 +82,32 @@ export type OverworldTile = "water" | "grass" | "forest" | "mountain" | "dungeon
 export type DungeonTile = "wall" | "floor" | "stairsUp" | "stairsDown";
 
 export type TileVisibility = "unseen" | "seen" | "visible";
+
+export type StatusEffectKind = "poison";
+
+export type StatusEffect = {
+  kind: StatusEffectKind;
+  remainingTurns: number;
+  potency: number;
+};
+
+export type QuestKind = "killMonsters";
+
+export type Quest = {
+  id: string;
+  townId: string;
+  kind: QuestKind;
+  description: string;
+
+  targetCount: number;
+  currentCount: number;
+
+  minDungeonDepth: number;
+
+  rewardGold: number;
+  rewardXp: number;
+  completed: boolean;
+  turnedIn: boolean;
+};
 
 export type Message = { text: string; t: number };
