@@ -2,24 +2,98 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>Web Roguelike Starter</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Web Roguelike Starter+</title>
     <style>
+      :root { color-scheme: dark; }
       body {
-        background: black;
-        color: #00ff88;
-        font-family: monospace;
+        background: #0b0f14;
+        color: #cfe3ff;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
         margin: 0;
+        padding: 12px;
+      }
+      .wrap {
+        display: grid;
+        grid-template-columns: 1fr 340px;
+        gap: 12px;
+        align-items: start;
+      }
+      #ascii {
+        white-space: pre;
+        line-height: 1.05em;
+        font-size: 14px;
+        border: 1px solid #1a2433;
+        border-radius: 10px;
+        padding: 10px;
+        background: #070a0f;
+        min-height: 560px;
+      }
+      #canvasWrap {
+        border: 1px solid #1a2433;
+        border-radius: 10px;
+        background: #070a0f;
         padding: 10px;
       }
-      #game {
-        white-space: pre;
-        line-height: 1.1em;
-        font-size: 14px;
+      #gameCanvas { image-rendering: pixelated; width: 100%; height: auto; border-radius: 8px; }
+      #side {
+        border: 1px solid #1a2433;
+        border-radius: 10px;
+        padding: 10px;
+        background: #070a0f;
       }
+      #log {
+        margin-top: 10px;
+        border-top: 1px solid #1a2433;
+        padding-top: 10px;
+        max-height: 360px;
+        overflow: auto;
+      }
+      .hint { color: #8db3ff; font-size: 12px; }
+      .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      button {
+        background: #122033;
+        color: #cfe3ff;
+        border: 1px solid #1a2433;
+        border-radius: 10px;
+        padding: 8px 10px;
+        cursor: pointer;
+      }
+      button:hover { filter: brightness(1.1); }
+      .pill { padding: 3px 8px; border-radius: 999px; border: 1px solid #1a2433; background: #0b1320; font-size: 12px; }
     </style>
   </head>
   <body>
-    <div id="game"></div>
+    <div class="wrap">
+      <div>
+        <div class="row" style="margin-bottom: 10px;">
+          <span class="pill" id="modePill"></span>
+          <span class="pill" id="renderPill"></span>
+          <span class="hint">WASD/Arrows move • Enter = use/enter • R toggle renderer • F toggle FOV • ? help</span>
+        </div>
+
+        <div id="ascii"></div>
+
+        <div id="canvasWrap" style="margin-top: 12px; display:none;">
+          <canvas id="gameCanvas" width="704" height="384"></canvas>
+        </div>
+      </div>
+
+      <div id="side">
+        <div class="row">
+          <button id="btnAscii">ASCII</button>
+          <button id="btnCanvas">Canvas</button>
+          <button id="btnNewSeed">New Seed</button>
+        </div>
+        <div class="hint" style="margin-top: 10px;">
+          Overworld: find <b>D</b> entrances. Dungeons persist per entrance.
+          Monsters take turns after you. Fog of war tracks explored tiles.
+        </div>
+        <div id="stats" style="margin-top: 10px;"></div>
+        <div id="log"></div>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
