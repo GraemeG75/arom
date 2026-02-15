@@ -252,17 +252,34 @@ function renderQuestLog(quests: import('../core/types').Quest[], activeTownId: s
     const status: string = q.turnedIn ? 'Turned in' : q.completed ? 'Complete' : 'Active';
     const progress: string = q.kind === 'reachDepth' ? `Depth ${q.currentCount}/${q.targetCount}` : `Progress ${q.currentCount}/${q.targetCount}`;
     const rewardItem: Item | undefined = q.rewardItemId ? items.find((it) => it.id === q.rewardItemId) : undefined;
+    const rewardOptions: Item[] = q.rewardItemIds
+      ? q.rewardItemIds.map((id) => items.find((it) => it.id === id)).filter((it): it is Item => !!it)
+      : [];
     const rewardItemLabel: string = rewardItem ? `, ${rewardItem.name}` : '';
     lines.push(`<div class="small"><b>${escapeHtml(q.description)}</b></div>`);
     lines.push(
       `<div class="small panelLine">${escapeHtml(progress)} • Reward: ${q.rewardGold}g, ${q.rewardXp} XP${escapeHtml(rewardItemLabel)}</div>`
     );
+    if (!rewardItem && rewardOptions.length > 0) {
+      const optionNames: string = rewardOptions.map((it) => it.name).join(' or ');
+      lines.push(`<div class="small panelLine">Choose 1: ${escapeHtml(optionNames)}</div>`);
+    }
     lines.push(`<div class="small muted">Status: ${escapeHtml(status)}</div>`);
 
     if (activeTownId && q.townId === activeTownId && q.completed && !q.turnedIn) {
-      lines.push(
-        `<div class="row" style="justify-content:flex-end;"><button class="btnTiny" data-act="turnIn" data-quest="${q.id}">Turn In</button></div>`
-      );
+      if (!rewardItem && rewardOptions.length > 0) {
+        for (const option of rewardOptions) {
+          lines.push(
+            `<div class="row" style="justify-content:flex-end;">` +
+              `<button class="btnTiny" data-act="chooseReward" data-quest="${q.id}" data-reward="${option.id}">Choose ${escapeHtml(option.name)}</button>` +
+              `</div>`
+          );
+        }
+      } else {
+        lines.push(
+          `<div class="row" style="justify-content:flex-end;"><button class="btnTiny" data-act="turnIn" data-quest="${q.id}">Turn In</button></div>`
+        );
+      }
     }
     lines.push(`<div class="sep"></div>`);
   }
