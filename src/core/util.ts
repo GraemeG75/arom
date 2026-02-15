@@ -1,4 +1,4 @@
-import type { Point } from "./types";
+import type { Point } from './types';
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -17,7 +17,7 @@ export function keyPoint(p: Point): string {
 }
 
 export function parseKeyPoint(k: string): Point | undefined {
-  const parts: string[] = k.split(",");
+  const parts: string[] = k.split(',');
   if (parts.length !== 2) return undefined;
   const x: number = Number(parts[0]);
   const y: number = Number(parts[1]);

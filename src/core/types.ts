@@ -42,6 +42,8 @@ export type Entity = {
   statusEffects?: StatusEffect[];
 };
 
+export type GearRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+
 export type ItemKind = 'potion' | 'weapon' | 'armor';
 
 export type Item = {
@@ -57,9 +59,15 @@ export type Item = {
   healAmount?: number;
   attackBonus?: number;
   defenseBonus?: number;
+  critChance?: number;
+  dodgeChance?: number;
+  lifesteal?: number;
+  thorns?: number;
 
   // Economy:
   value: number; // buy/sell base price
+
+  rarity?: GearRarity;
 };
 
 export type Shop = {

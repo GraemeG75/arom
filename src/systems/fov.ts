@@ -1,7 +1,7 @@
-import type { Point } from "../core/types";
-import { clamp } from "../core/util";
-import type { Dungeon } from "../maps/dungeon";
-import { getDungeonTile, isDungeonOpaque, setVisibility } from "../maps/dungeon";
+import type { Point } from '../core/types';
+import { clamp } from '../core/util';
+import type { Dungeon } from '../maps/dungeon';
+import { getDungeonTile, isDungeonOpaque, setVisibility } from '../maps/dungeon';
 
 function bresenhamLine(a: Point, b: Point): Point[] {
   const points: Point[] = [];
@@ -22,8 +22,14 @@ function bresenhamLine(a: Point, b: Point): Point[] {
     if (x0 === x1 && y0 === y1) break;
 
     const e2: number = 2 * err;
-    if (e2 > -dy) { err -= dy; x0 += sx; }
-    if (e2 < dx) { err += dx; y0 += sy; }
+    if (e2 > -dy) {
+      err -= dy;
+      x0 += sx;
+    }
+    if (e2 < dx) {
+      err += dx;
+      y0 += sy;
+    }
   }
 
   return points;
@@ -31,7 +37,7 @@ function bresenhamLine(a: Point, b: Point): Point[] {
 
 export function decayVisibilityToSeen(dungeon: Dungeon): void {
   for (let i: number = 0; i < dungeon.visibility.length; i++) {
-    if (dungeon.visibility[i] === "visible") dungeon.visibility[i] = "seen";
+    if (dungeon.visibility[i] === 'visible') dungeon.visibility[i] = 'seen';
   }
 }
 
@@ -49,7 +55,7 @@ export function computeDungeonFov(dungeon: Dungeon, origin: Point, radius: numbe
     for (let x: number = minX; x <= maxX; x++) {
       const dx: number = x - origin.x;
       const dy: number = y - origin.y;
-      if ((dx * dx + dy * dy) > r2) continue;
+      if (dx * dx + dy * dy > r2) continue;
 
       const line: Point[] = bresenhamLine(origin, { x, y });
 
@@ -59,7 +65,7 @@ export function computeDungeonFov(dungeon: Dungeon, origin: Point, radius: numbe
 
         const k: string = `${p.x},${p.y}`;
         visible.add(k);
-        setVisibility(dungeon, p.x, p.y, "visible");
+        setVisibility(dungeon, p.x, p.y, 'visible');
 
         if (p.x === x && p.y === y) break;
 

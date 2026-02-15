@@ -1,4 +1,4 @@
-import type { Action, CharacterClass, Entity, Item, Mode, Point, Shop } from './core/types';
+import type { Action, CharacterClass, Entity, GearRarity, Item, Mode, Point, Shop } from './core/types';
 import { Rng } from './core/rng';
 import { add, manhattan } from './core/util';
 import { Overworld, dungeonBaseIdFromWorldPos, dungeonLevelId, dungeonSeedFromWorldPos, townIdFromWorldPos } from './maps/overworld';
@@ -143,18 +143,36 @@ const CLASS_GEAR: Record<CharacterClass, ClassGearConfig> = {
   }
 };
 
-const WEAPON_PREFIXES: readonly string[] = [
-  'Sunforged',
-  'Stormcall',
-  'Glimmering',
-  'Nightfall',
-  'Emberforged',
-  'Voidbound',
-  'Ironchant',
-  'Frostvein'
+type GearAffix = {
+  name: string;
+  attackBonus?: number;
+  defenseBonus?: number;
+  critChance?: number;
+  dodgeChance?: number;
+  lifesteal?: number;
+  thorns?: number;
+};
+
+const WEAPON_PREFIXES: readonly GearAffix[] = [
+  { name: 'Sunforged', attackBonus: 1 },
+  { name: 'Stormcall', critChance: 3, attackBonus: 1 },
+  { name: 'Glimmering', critChance: 4 },
+  { name: 'Nightfall', critChance: 2 },
+  { name: 'Emberforged', attackBonus: 1 },
+  { name: 'Voidbound', lifesteal: 3 },
+  { name: 'Ironchant', attackBonus: 1, critChance: 2 },
+  { name: 'Frostvein', critChance: 3 }
 ] as const;
 
-const WEAPON_SUFFIXES: readonly string[] = ['of the Fox', 'of Embers', 'of the Depths', 'of Dawn', 'of Ruin', 'of the Tempest', 'of Echoes'] as const;
+const WEAPON_SUFFIXES: readonly GearAffix[] = [
+  { name: 'of the Fox', critChance: 5 },
+  { name: 'of Embers', attackBonus: 1 },
+  { name: 'of the Depths', lifesteal: 5 },
+  { name: 'of Dawn', critChance: 3 },
+  { name: 'of Ruin', attackBonus: 2 },
+  { name: 'of the Tempest', critChance: 4, attackBonus: 1 },
+  { name: 'of Echoes', lifesteal: 4 }
+] as const;
 
 const WEAPON_BASES: readonly WeaponTemplate[] = [
   { noun: 'Blade', baseAttack: 2, scale: 2 },
@@ -166,9 +184,24 @@ const WEAPON_BASES: readonly WeaponTemplate[] = [
   { noun: 'Quarterstaff', baseAttack: 2, scale: 2 }
 ] as const;
 
-const ARMOR_PREFIXES: readonly string[] = ['Runeward', 'Starwoven', 'Stoneplate', 'Whispersteel', 'Moonlit', 'Ashen', 'Verdant'] as const;
+const ARMOR_PREFIXES: readonly GearAffix[] = [
+  { name: 'Runeward', defenseBonus: 1 },
+  { name: 'Starwoven', dodgeChance: 3 },
+  { name: 'Stoneplate', defenseBonus: 2 },
+  { name: 'Whispersteel', dodgeChance: 4 },
+  { name: 'Moonlit', dodgeChance: 6 },
+  { name: 'Ashen', thorns: 2 },
+  { name: 'Verdant', thorns: 3 }
+] as const;
 
-const ARMOR_SUFFIXES: readonly string[] = ['of Resilience', 'of the Mirage', 'of the Glacier', 'of Sparks', 'of the Sentinel', 'of Cinders'] as const;
+const ARMOR_SUFFIXES: readonly GearAffix[] = [
+  { name: 'of Resilience', defenseBonus: 1 },
+  { name: 'of the Mirage', dodgeChance: 6 },
+  { name: 'of the Glacier', defenseBonus: 1 },
+  { name: 'of Sparks', thorns: 2 },
+  { name: 'of the Sentinel', defenseBonus: 2 },
+  { name: 'of Cinders', thorns: 3 }
+] as const;
 
 const ARMOR_BASES: readonly ArmorTemplate[] = [
   { noun: 'Vestments', baseDefense: 1, scale: 3 },
@@ -178,6 +211,102 @@ const ARMOR_BASES: readonly ArmorTemplate[] = [
   { noun: 'Carapace', baseDefense: 3, scale: 4 },
   { noun: 'Guardplate', baseDefense: 3, scale: 3 }
 ] as const;
+
+type RarityConfig = {
+  key: GearRarity;
+  label: string;
+  namePrefix: string;
+  attackBonus: number;
+  defenseBonus: number;
+  weaponCritChance: number;
+  weaponLifesteal: number;
+  armorDodgeChance: number;
+  armorThorns: number;
+  valueMultiplier: number;
+  baseWeight: number;
+  depthWeight: number;
+};
+
+const RARITY_CONFIGS: readonly RarityConfig[] = [
+  {
+    key: 'common',
+    label: 'Common',
+    namePrefix: '',
+    attackBonus: 0,
+    defenseBonus: 0,
+    weaponCritChance: 0,
+    weaponLifesteal: 0,
+    armorDodgeChance: 0,
+    armorThorns: 0,
+    valueMultiplier: 1,
+    baseWeight: 80,
+    depthWeight: 0
+  },
+  {
+    key: 'uncommon',
+    label: 'Uncommon',
+    namePrefix: 'Uncommon',
+    attackBonus: 1,
+    defenseBonus: 1,
+    weaponCritChance: 2,
+    weaponLifesteal: 1,
+    armorDodgeChance: 2,
+    armorThorns: 1,
+    valueMultiplier: 1.25,
+    baseWeight: 42,
+    depthWeight: 3
+  },
+  {
+    key: 'rare',
+    label: 'Rare',
+    namePrefix: 'Rare',
+    attackBonus: 2,
+    defenseBonus: 2,
+    weaponCritChance: 4,
+    weaponLifesteal: 2,
+    armorDodgeChance: 4,
+    armorThorns: 2,
+    valueMultiplier: 1.65,
+    baseWeight: 18,
+    depthWeight: 4
+  },
+  {
+    key: 'epic',
+    label: 'Epic',
+    namePrefix: 'Epic',
+    attackBonus: 3,
+    defenseBonus: 3,
+    weaponCritChance: 6,
+    weaponLifesteal: 3,
+    armorDodgeChance: 6,
+    armorThorns: 3,
+    valueMultiplier: 2.25,
+    baseWeight: 6,
+    depthWeight: 3
+  },
+  {
+    key: 'legendary',
+    label: 'Legendary',
+    namePrefix: 'Legendary',
+    attackBonus: 4,
+    defenseBonus: 4,
+    weaponCritChance: 9,
+    weaponLifesteal: 5,
+    armorDodgeChance: 9,
+    armorThorns: 4,
+    valueMultiplier: 3.1,
+    baseWeight: 2,
+    depthWeight: 2
+  }
+] as const;
+
+const RARITY_CONFIG_BY_KEY: Record<GearRarity, RarityConfig> = RARITY_CONFIGS.reduce(
+  (acc: Record<GearRarity, RarityConfig>, cfg: RarityConfig) => {
+    acc[cfg.key] = cfg;
+    return acc;
+  },
+  {} as Record<GearRarity, RarityConfig>
+);
 
 function ensureClassAttributes(player: Entity, classType: CharacterClass): void {
   const cfg: ClassConfig = CLASS_CONFIG[classType];
@@ -200,28 +329,57 @@ function buildItemName(prefix: string | undefined, base: string, suffix: string 
   return parts.join(' ');
 }
 
+function rollRarity(power: number, rng: Rng): RarityConfig {
+  const depthFactor: number = Math.max(0, power - 1);
+  const weights: number[] = [];
+  let total: number = 0;
+  for (const cfg of RARITY_CONFIGS) {
+    const weight: number = Math.max(1, Math.floor(cfg.baseWeight + cfg.depthWeight * depthFactor));
+    weights.push(weight);
+    total += weight;
+  }
+
+  let roll: number = rng.nextInt(0, total);
+  for (let i: number = 0; i < RARITY_CONFIGS.length; i++) {
+    roll -= weights[i];
+    if (roll < 0) return RARITY_CONFIGS[i];
+  }
+
+  return RARITY_CONFIGS[RARITY_CONFIGS.length - 1];
+}
+
 function generateWeaponLoot(id: string, power: number, rng: Rng): Item {
+  const rarity: RarityConfig = rollRarity(Math.max(1, power), rng);
   const base: WeaponTemplate = randChoice(WEAPON_BASES, rng);
-  const prefix: string | undefined = rng.nextInt(0, 100) < 65 ? randChoice(WEAPON_PREFIXES, rng) : undefined;
-  const suffix: string | undefined = rng.nextInt(0, 100) < 55 ? randChoice(WEAPON_SUFFIXES, rng) : undefined;
+  const prefix: GearAffix | undefined = rng.nextInt(0, 100) < 65 ? randChoice(WEAPON_PREFIXES, rng) : undefined;
+  const suffix: GearAffix | undefined = rng.nextInt(0, 100) < 55 ? randChoice(WEAPON_SUFFIXES, rng) : undefined;
   const scaling: number = Math.max(1, Math.floor(Math.max(1, power) / base.scale));
   const variance: number = rng.nextInt(0, 2);
-  const attackBonus: number = Math.max(1, base.baseAttack + scaling + variance);
-  const value: number = 16 + attackBonus * 9;
-  const name: string = buildItemName(prefix, base.noun, suffix);
-  return { id, kind: 'weapon', name, attackBonus, value };
+  const affixAttack: number = (prefix?.attackBonus ?? 0) + (suffix?.attackBonus ?? 0);
+  const attackBonus: number = Math.max(1, base.baseAttack + scaling + variance + rarity.attackBonus + affixAttack);
+  const critChance: number = (prefix?.critChance ?? 0) + (suffix?.critChance ?? 0) + rarity.weaponCritChance;
+  const lifesteal: number = (prefix?.lifesteal ?? 0) + (suffix?.lifesteal ?? 0) + rarity.weaponLifesteal;
+  const value: number = Math.max(1, Math.round((16 + attackBonus * 9) * rarity.valueMultiplier));
+  const nameBase: string = buildItemName(prefix?.name, base.noun, suffix?.name);
+  const name: string = `${rarity.namePrefix ? `${rarity.namePrefix} ` : ''}${nameBase}`.trim();
+  return { id, kind: 'weapon', name, attackBonus, value, rarity: rarity.key, critChance, lifesteal };
 }
 
 function generateArmorLoot(id: string, power: number, rng: Rng): Item {
+  const rarity: RarityConfig = rollRarity(Math.max(1, power), rng);
   const base: ArmorTemplate = randChoice(ARMOR_BASES, rng);
-  const prefix: string | undefined = rng.nextInt(0, 100) < 60 ? randChoice(ARMOR_PREFIXES, rng) : undefined;
-  const suffix: string | undefined = rng.nextInt(0, 100) < 45 ? randChoice(ARMOR_SUFFIXES, rng) : undefined;
+  const prefix: GearAffix | undefined = rng.nextInt(0, 100) < 60 ? randChoice(ARMOR_PREFIXES, rng) : undefined;
+  const suffix: GearAffix | undefined = rng.nextInt(0, 100) < 45 ? randChoice(ARMOR_SUFFIXES, rng) : undefined;
   const scaling: number = Math.max(1, Math.floor(Math.max(1, power) / base.scale));
   const variance: number = rng.nextInt(0, 2) === 0 ? 0 : 1;
-  const defenseBonus: number = Math.max(1, base.baseDefense + scaling + variance);
-  const value: number = 14 + defenseBonus * 8;
-  const name: string = buildItemName(prefix, base.noun, suffix);
-  return { id, kind: 'armor', name, defenseBonus, value };
+  const affixDefense: number = (prefix?.defenseBonus ?? 0) + (suffix?.defenseBonus ?? 0);
+  const defenseBonus: number = Math.max(1, base.baseDefense + scaling + variance + rarity.defenseBonus + affixDefense);
+  const dodgeChance: number = (prefix?.dodgeChance ?? 0) + (suffix?.dodgeChance ?? 0) + rarity.armorDodgeChance;
+  const thorns: number = (prefix?.thorns ?? 0) + (suffix?.thorns ?? 0) + rarity.armorThorns;
+  const value: number = Math.max(1, Math.round((14 + defenseBonus * 8) * rarity.valueMultiplier));
+  const nameBase: string = buildItemName(prefix?.name, base.noun, suffix?.name);
+  const name: string = `${rarity.namePrefix ? `${rarity.namePrefix} ` : ''}${nameBase}`.trim();
+  return { id, kind: 'armor', name, defenseBonus, value, rarity: rarity.key, dodgeChance, thorns };
 }
 
 function createGearItem(
@@ -233,9 +391,9 @@ function createGearItem(
   value: number
 ): Item {
   if (slot === 'weapon') {
-    return { id, kind: 'weapon', name: spec.name, attackBonus: attackBonus ?? spec.attackBonus ?? 0, value };
+    return { id, kind: 'weapon', name: spec.name, attackBonus: attackBonus ?? spec.attackBonus ?? 0, value, rarity: 'common' };
   }
-  return { id, kind: 'armor', name: spec.name, defenseBonus: defenseBonus ?? spec.defenseBonus ?? 0, value };
+  return { id, kind: 'armor', name: spec.name, defenseBonus: defenseBonus ?? spec.defenseBonus ?? 0, value, rarity: 'common' };
 }
 
 function ensureStartingGear(state: GameState, classType: CharacterClass): void {
@@ -277,22 +435,34 @@ function ensureStartingGear(state: GameState, classType: CharacterClass): void {
   }
 }
 
-function createClassUpgradeItem(classType: CharacterClass, slot: 'weapon' | 'armor', dungeon: Dungeon, id: string, depth: number): Item {
+function createClassUpgradeItem(classType: CharacterClass, slot: 'weapon' | 'armor', id: string, upgradeLevel: number, rng: Rng): Item {
   const gear: ClassGearConfig = CLASS_GEAR[classType];
   const spec: GearSpec = slot === 'weapon' ? gear.weapon : gear.armor;
-  const scaling: number = Math.max(1, Math.floor(depth / 2)) + 1;
+  const level: number = Math.max(1, upgradeLevel);
+  const rarity: RarityConfig = rollRarity(level, rng);
 
   if (slot === 'weapon') {
-    const attackBonus: number = spec.attackBonus! + scaling;
-    const name: string = `${spec.upgradeName} +${attackBonus - spec.attackBonus!}`;
-    const value: number = spec.value + scaling * 18;
-    return { id, kind: 'weapon', name, attackBonus, value };
+    const baseAttack: number = spec.attackBonus ?? 0;
+    const attackBonus: number = baseAttack + level + rarity.attackBonus;
+    const nameBase: string = `${spec.upgradeName} +${attackBonus - baseAttack}`;
+    const name: string = rarity.namePrefix ? `${rarity.namePrefix} ${nameBase}` : nameBase;
+    const baseValue: number = spec.value + level * 18;
+    const value: number = Math.max(1, Math.round(baseValue * rarity.valueMultiplier));
+    const critChance: number = rarity.weaponCritChance;
+    const lifesteal: number = rarity.weaponLifesteal;
+    return { id, kind: 'weapon', name, attackBonus, value, rarity: rarity.key, critChance, lifesteal };
   }
 
-  const defenseBonus: number = spec.defenseBonus! + Math.max(1, Math.floor(scaling / 2));
-  const name: string = `${spec.upgradeName} +${defenseBonus - spec.defenseBonus!}`;
-  const value: number = spec.value + scaling * 16;
-  return { id, kind: 'armor', name, defenseBonus, value };
+  const baseDefense: number = spec.defenseBonus ?? 0;
+  const defenseGain: number = Math.max(1, Math.floor(level / 2));
+  const defenseBonus: number = baseDefense + defenseGain + rarity.defenseBonus;
+  const nameBase: string = `${spec.upgradeName} +${defenseBonus - baseDefense}`;
+  const name: string = rarity.namePrefix ? `${rarity.namePrefix} ${nameBase}` : nameBase;
+  const baseValue: number = spec.value + level * 16;
+  const value: number = Math.max(1, Math.round(baseValue * rarity.valueMultiplier));
+  const dodgeChance: number = rarity.armorDodgeChance;
+  const thorns: number = rarity.armorThorns;
+  return { id, kind: 'armor', name, defenseBonus, value, rarity: rarity.key, dodgeChance, thorns };
 }
 
 const asciiEl: HTMLElement = document.getElementById('ascii')!;
@@ -543,7 +713,8 @@ function spawnLootInDungeon(s: GameState, dungeon: Dungeon, seed: number): void 
     } else {
       const slot: 'weapon' | 'armor' = rng.nextInt(0, 2) === 0 ? 'weapon' : 'armor';
       const upgradeId: string = `${baseId}_class_${slot}`;
-      item = createClassUpgradeItem(s.playerClass, slot, dungeon, upgradeId, dungeon.depth);
+      const upgradeLevel: number = Math.max(1, Math.floor(dungeon.depth / 2) + 1);
+      item = createClassUpgradeItem(s.playerClass, slot, upgradeId, upgradeLevel, rng);
     }
 
     item.mapRef = { kind: 'dungeon', dungeonId: dungeon.id };
@@ -681,34 +852,28 @@ function maybeRestockShop(s: GameState, shop: Shop): void {
     stock.push(itemId);
   }
 
-  addClassGearToShop(s, shop.id, stock, Math.max(1, Math.floor(s.turnCounter / restockInterval)));
+  addClassGearToShop(s, shop.id, stock, Math.max(1, Math.floor(s.turnCounter / restockInterval)), rng);
 
   shop.stockItemIds = stock;
   s.log.push('The shop has new stock.');
 }
 
-function addClassGearToShop(s: GameState, shopId: string, stock: string[], tier: number): void {
-  const gear: ClassGearConfig | undefined = CLASS_GEAR[s.playerClass];
-  if (!gear) return;
+function addClassGearToShop(s: GameState, shopId: string, stock: string[], tier: number, rng: Rng): void {
+  if (!CLASS_GEAR[s.playerClass]) return;
 
   const existingIds: Set<string> = new Set<string>(stock);
+  const upgradeLevel: number = Math.max(1, tier + 1);
 
   const weaponId: string = `shop_${shopId}_class_weapon_${tier}`;
   if (!existingIds.has(weaponId) && !s.items.some((it) => it.id === weaponId)) {
-    const attackBonus: number = gear.weapon.attackBonus + tier + 1;
-    const name: string = `${gear.weapon.upgradeName} +${attackBonus - gear.weapon.attackBonus}`;
-    const value: number = gear.weapon.value + 25 + tier * 18;
-    const item: Item = { id: weaponId, kind: 'weapon', name, attackBonus, value };
+    const item: Item = createClassUpgradeItem(s.playerClass, 'weapon', weaponId, upgradeLevel, rng);
     s.items.push(item);
     stock.push(weaponId);
   }
 
   const armorId: string = `shop_${shopId}_class_armor_${tier}`;
   if (!existingIds.has(armorId) && !s.items.some((it) => it.id === armorId)) {
-    const defenseBonus: number = gear.armor.defenseBonus + Math.max(1, Math.floor((tier + 1) / 2));
-    const name: string = `${gear.armor.upgradeName} +${defenseBonus - gear.armor.defenseBonus}`;
-    const value: number = gear.armor.value + 22 + tier * 16;
-    const item: Item = { id: armorId, kind: 'armor', name, defenseBonus, value };
+    const item: Item = createClassUpgradeItem(s.playerClass, 'armor', armorId, upgradeLevel, rng);
     s.items.push(item);
     stock.push(armorId);
   }
@@ -745,7 +910,7 @@ function ensureShopForTown(s: GameState, townPos: Point): Shop {
     stock.push(itemId);
   }
 
-  addClassGearToShop(s, shopId, stock, 0);
+  addClassGearToShop(s, shopId, stock, 0, rng);
 
   const created: Shop = { id: shopId, townWorldPos: { x: townPos.x, y: townPos.y }, stockItemIds: stock };
   s.shops.set(shopId, created);
@@ -1024,18 +1189,40 @@ function tryMovePlayer(dx: number, dy: number): boolean {
   return moved;
 }
 
-function getEquippedAttackBonus(entity: Entity): number {
+function getEquippedWeaponItem(entity: Entity): Item | undefined {
   const weaponId: string | undefined = entity.equipment.weaponItemId;
-  if (!weaponId) return 0;
-  const it: Item | undefined = state.items.find((x) => x.id === weaponId);
-  return it?.attackBonus ?? 0;
+  if (!weaponId) return undefined;
+  return state.items.find((x) => x.id === weaponId);
+}
+
+function getEquippedArmorItem(entity: Entity): Item | undefined {
+  const armorId: string | undefined = entity.equipment.armorItemId;
+  if (!armorId) return undefined;
+  return state.items.find((x) => x.id === armorId);
+}
+
+function getEquippedAttackBonus(entity: Entity): number {
+  return getEquippedWeaponItem(entity)?.attackBonus ?? 0;
 }
 
 function getEquippedDefenseBonus(entity: Entity): number {
-  const armorId: string | undefined = entity.equipment.armorItemId;
-  if (!armorId) return 0;
-  const it: Item | undefined = state.items.find((x) => x.id === armorId);
-  return it?.defenseBonus ?? 0;
+  return getEquippedArmorItem(entity)?.defenseBonus ?? 0;
+}
+
+function getEquippedCritChance(entity: Entity): number {
+  return getEquippedWeaponItem(entity)?.critChance ?? 0;
+}
+
+function getEquippedLifesteal(entity: Entity): number {
+  return getEquippedWeaponItem(entity)?.lifesteal ?? 0;
+}
+
+function getEquippedDodgeChance(entity: Entity): number {
+  return getEquippedArmorItem(entity)?.dodgeChance ?? 0;
+}
+
+function getEquippedThorns(entity: Entity): number {
+  return getEquippedArmorItem(entity)?.thorns ?? 0;
 }
 
 type LevelUpGains = {
@@ -1124,8 +1311,17 @@ function attack(attacker: Entity, defender: Entity): void {
   const originalDef: number = def;
 
   let damageMultiplier: number = 1;
-  let suffix: string = '';
+  const suffixParts: string[] = [];
   let playerVerb: string = 'hit';
+  let critChance: number = 0;
+
+  if (defender.kind === 'player') {
+    const dodgeChance: number = Math.min(50, getEquippedDodgeChance(defender));
+    if (dodgeChance > 0 && state.rng.nextInt(0, 100) < dodgeChance) {
+      state.log.push('You dodge the attack.');
+      return;
+    }
+  }
 
   if (attacker.kind === 'player') {
     const classType: CharacterClass = state.playerClass;
@@ -1141,14 +1337,8 @@ function attack(attacker: Entity, defender: Entity): void {
       case 'rogue': {
         const agility: number = attacker.agility ?? 0;
         atk += Math.floor(agility / 2);
-        const critChance: number = Math.min(60, 10 + agility * 4);
-        if (state.rng.nextInt(0, 100) < critChance) {
-          damageMultiplier = 2;
-          playerVerb = 'backstab';
-          suffix = ' (critical!)';
-        } else {
-          playerVerb = 'stab';
-        }
+        critChance = Math.min(60, 10 + agility * 4);
+        playerVerb = 'stab';
         break;
       }
       case 'mage':
@@ -1156,10 +1346,17 @@ function attack(attacker: Entity, defender: Entity): void {
         const intellect: number = attacker.intellect ?? 0;
         atk += Math.floor(intellect / 2);
         def = Math.floor(def * 0.5);
-        if (def < originalDef) suffix = ' (armor melts)';
+        if (def < originalDef) suffixParts.push('armor melts');
         playerVerb = 'blast';
         break;
       }
+    }
+
+    critChance = Math.min(75, critChance + getEquippedCritChance(attacker));
+    if (critChance > 0 && state.rng.nextInt(0, 100) < critChance) {
+      damageMultiplier = 2;
+      if (playerVerb === 'stab') playerVerb = 'backstab';
+      suffixParts.push('critical!');
     }
   }
 
@@ -1170,7 +1367,38 @@ function attack(attacker: Entity, defender: Entity): void {
 
   defender.hp -= dmg;
 
+  if (attacker.kind === 'player') {
+    const lifesteal: number = Math.min(50, getEquippedLifesteal(attacker));
+    if (lifesteal > 0) {
+      const heal: number = Math.min(attacker.maxHp - attacker.hp, Math.floor((dmg * lifesteal) / 100));
+      if (heal > 0) {
+        attacker.hp += heal;
+        state.log.push(`Life steal restores ${heal} HP.`);
+      }
+    }
+  }
+
+  if (defender.kind === 'player' && attacker.kind === 'monster') {
+    const thorns: number = Math.min(20, getEquippedThorns(defender));
+    if (thorns > 0) {
+      attacker.hp -= thorns;
+      state.log.push(`${attacker.name} takes ${thorns} thorns damage.`);
+      if (attacker.hp <= 0) {
+        state.log.push(`${attacker.name} dies.`);
+        const xp: number = 6 + (attacker.baseAttack + attacker.baseDefense);
+        const gold: number = 2 + state.rng.nextInt(0, 4);
+        state.player.gold += gold;
+        state.log.push(`You gain ${xp} XP and loot ${gold} gold.`);
+        awardXp(xp);
+
+        const currentDepth: number = state.dungeonStack[state.dungeonStack.length - 1]?.depth ?? 0;
+        recordKillForQuests(state, currentDepth);
+      }
+    }
+  }
+
   const defenderHpText: string = `(${Math.max(0, defender.hp)}/${defender.maxHp})`;
+  const suffix: string = suffixParts.length > 0 ? ` (${suffixParts.join(', ')})` : '';
   if (attacker.kind === 'player') {
     state.log.push(`You ${playerVerb} ${defender.name} for ${dmg}${suffix}. ${defenderHpText}`);
   } else if (defender.kind === 'player') {

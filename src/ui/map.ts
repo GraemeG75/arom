@@ -1,5 +1,5 @@
-import type { Entity, Item, Point } from "../core/types";
-import type { Overworld } from "../maps/overworld";
+import type { Entity, Item, Point } from '../core/types';
+import type { Overworld } from '../maps/overworld';
 
 export type OverworldMapContext = {
   overworld: Overworld;
@@ -21,23 +21,32 @@ export function renderOverworldMapAscii(ctx: OverworldMapContext, width: number,
     for (const p of ctx.autoPath) pathSet.add(`${p.x},${p.y}`);
   }
 
-  let out: string = "";
+  let out: string = '';
   for (let y: number = -halfH; y <= halfH; y++) {
     for (let x: number = -halfW; x <= halfW; x++) {
       const wx: number = originX + x;
       const wy: number = originY + y;
 
-      if (x === 0 && y === 0) { out += "@"; continue; }
+      if (x === 0 && y === 0) {
+        out += '@';
+        continue;
+      }
 
-      if (ctx.destination && ctx.destination.x === wx && ctx.destination.y === wy) { out += "X"; continue; }
+      if (ctx.destination && ctx.destination.x === wx && ctx.destination.y === wy) {
+        out += 'X';
+        continue;
+      }
 
       const k: string = `${wx},${wy}`;
-      if (pathSet.has(k)) { out += "*"; continue; }
+      if (pathSet.has(k)) {
+        out += '*';
+        continue;
+      }
 
       const tile = ctx.overworld.getTile(wx, wy);
       out += overworldChar(tile);
     }
-    out += "\n";
+    out += '\n';
   }
 
   return out;
@@ -45,13 +54,21 @@ export function renderOverworldMapAscii(ctx: OverworldMapContext, width: number,
 
 function overworldChar(tile: string): string {
   switch (tile) {
-    case "water": return "~";
-    case "grass": return ".";
-    case "forest": return "♣";
-    case "mountain": return "^";
-    case "dungeon": return "D";
-    case "town": return "T";
-    case "road": return "=";
-    default: return "?";
+    case 'water':
+      return '~';
+    case 'grass':
+      return '.';
+    case 'forest':
+      return '♣';
+    case 'mountain':
+      return '^';
+    case 'dungeon':
+      return 'D';
+    case 'town':
+      return 'T';
+    case 'road':
+      return '=';
+    default:
+      return '?';
   }
 }
