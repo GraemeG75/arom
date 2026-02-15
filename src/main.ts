@@ -7,7 +7,6 @@ import { generateDungeon, getDungeonTile, randomFloorPoint } from './maps/dungeo
 import { computeDungeonFov, decayVisibilityToSeen } from './systems/fov';
 import { canEnterDungeonTile, canEnterOverworldTile, isBlockedByEntity } from './systems/rules';
 import { nextMonsterStep } from './systems/ai';
-import { renderAscii } from './render/ascii';
 import { PixiRenderer } from './render/pixi';
 import { MessageLog } from './ui/log';
 import { loadFromLocalStorage, saveToLocalStorage, type SaveDataV3 } from './core/save';
@@ -59,9 +58,6 @@ type GameState = {
   log: MessageLog;
 };
 
-const VIEW_W: number = 61;
-const VIEW_H: number = 33;
-
 const asciiEl: HTMLElement = document.getElementById('ascii')!;
 const canvasWrap: HTMLElement = document.getElementById('canvasWrap')!;
 const modePill: HTMLElement = document.getElementById('modePill')!;
@@ -83,6 +79,8 @@ const canvas: HTMLCanvasElement = document.getElementById('gameCanvas') as HTMLC
 const canvasRenderer: PixiRenderer = new PixiRenderer(canvas);
 const PIXI_VIEW_W: number = Math.max(1, Math.floor(canvas.width / 16) - 1);
 const PIXI_VIEW_H: number = Math.max(1, Math.floor(canvas.height / 16) - 1);
+
+btnAscii.style.display = 'none';
 
 function newGame(worldSeed: number): GameState {
   const rng: Rng = new Rng(worldSeed);
@@ -118,7 +116,7 @@ function newGame(worldSeed: number): GameState {
     entities: [player],
     items: [],
     shops: new Map<string, Shop>(),
-    rendererMode: 'ascii',
+    rendererMode: 'canvas',
     useFov: true,
     activePanel: 'none',
     shopCategory: 'all',
@@ -469,7 +467,8 @@ function removeDeadEntities(s: GameState): void {
 
 function handleAction(action: Action): void {
   if (action.kind === 'toggleRenderer') {
-    state.rendererMode = state.rendererMode === 'ascii' ? 'canvas' : 'ascii';
+    state.rendererMode = 'canvas';
+    state.log.push('Renderer locked to PixiJS for now.');
     syncRendererUi();
     render();
     return;
@@ -900,9 +899,8 @@ function setDestination(dest: Point): void {
 }
 
 function syncRendererUi(): void {
-  const isAscii: boolean = state.rendererMode === 'ascii';
-  asciiEl.style.display = isAscii ? 'block' : 'none';
-  canvasWrap.style.display = isAscii ? 'none' : 'block';
+  asciiEl.style.display = 'none';
+  canvasWrap.style.display = 'block';
 }
 
 function render(): void {
@@ -913,7 +911,7 @@ function render(): void {
       ? 'Mode: overworld'
       : `Mode: dungeon (depth ${state.dungeonStack[state.dungeonStack.length - 1]?.depth ?? 0} • ${dungeon?.theme ?? '?'})`;
 
-  renderPill.textContent = `Renderer: ${state.rendererMode} • FOV: ${state.useFov ? 'on' : 'off'}`;
+  renderPill.textContent = `Renderer: PixiJS • FOV: ${state.useFov ? 'on' : 'off'}`;
 
   if (state.mode === 'dungeon' && dungeon && state.useFov) {
     decayVisibilityToSeen(dungeon);
@@ -975,39 +973,21 @@ function render(): void {
     return;
   }
 
-  if (state.rendererMode === 'ascii') {
-    asciiEl.style.display = 'block';
-    canvasWrap.style.display = 'none';
-    asciiEl.textContent = renderAscii(
-      {
-        mode: state.mode,
-        overworld: state.overworld,
-        dungeon,
-        player: state.player,
-        entities: state.entities,
-        items: state.items,
-        useFov: state.useFov
-      },
-      VIEW_W,
-      VIEW_H
-    );
-  } else {
-    asciiEl.style.display = 'none';
-    canvasWrap.style.display = 'block';
-    canvasRenderer.render(
-      {
-        mode: state.mode,
-        overworld: state.overworld,
-        dungeon,
-        player: state.player,
-        entities: state.entities,
-        items: state.items,
-        useFov: state.useFov
-      },
-      PIXI_VIEW_W,
-      PIXI_VIEW_H
-    );
-  }
+  asciiEl.style.display = 'none';
+  canvasWrap.style.display = 'block';
+  canvasRenderer.render(
+    {
+      mode: state.mode,
+      overworld: state.overworld,
+      dungeon,
+      player: state.player,
+      entities: state.entities,
+      items: state.items,
+      useFov: state.useFov
+    },
+    PIXI_VIEW_W,
+    PIXI_VIEW_H
+  );
 }
 
 // Panel actions (inventory/shop buttons)
@@ -1267,8 +1247,7 @@ window.addEventListener('keydown', (e: KeyboardEvent) => {
 });
 
 btnAscii.addEventListener('click', () => {
-  state.rendererMode = 'ascii';
-  syncRendererUi();
+  state.log.push('ASCII renderer temporarily disabled.');
   render();
 });
 

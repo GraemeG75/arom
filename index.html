@@ -1,15 +1,19 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1" />
     <title>Web Roguelike Starter+++</title>
     <style>
-      :root { color-scheme: dark; }
+      :root {
+        color-scheme: dark;
+      }
       body {
         background: #0b0f14;
         color: #cfe3ff;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
         margin: 0;
         padding: 12px;
       }
@@ -34,8 +38,14 @@
         border-radius: 10px;
         background: #070a0f;
         padding: 10px;
+        width: fit-content;
       }
-      #gameCanvas { image-rendering: pixelated; width: 100%; height: auto; border-radius: 8px; }
+      #gameCanvas {
+        image-rendering: pixelated;
+        width: 100%;
+        height: auto;
+        border-radius: 8px;
+      }
       #side {
         border: 1px solid #1a2433;
         border-radius: 10px;
@@ -56,8 +66,16 @@
         max-height: 320px;
         overflow: auto;
       }
-      .hint { color: #8db3ff; font-size: 12px; }
-      .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      .hint {
+        color: #8db3ff;
+        font-size: 12px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
       button {
         background: #122033;
         color: #cfe3ff;
@@ -66,38 +84,98 @@
         padding: 8px 10px;
         cursor: pointer;
       }
-      button:hover { filter: brightness(1.1); }
-      .pill { padding: 3px 8px; border-radius: 999px; border: 1px solid #1a2433; background: #0b1320; font-size: 12px; }
-      .kv { display:flex; justify-content: space-between; gap:10px; }
-      .small { font-size: 12px; color: #a9c5ff; }
-      .muted { color: #93a7c8; }
-      b { color: #e7f0ff; }
-      .panelTitle { display:flex; justify-content: space-between; align-items: baseline; }
-      .grid { display:grid; grid-template-columns: 1fr auto; gap: 6px 8px; align-items:center; }
-      .btnTiny { padding: 4px 8px; border-radius: 8px; font-size: 12px; }
-      .sep { border-top: 1px solid #1a2433; margin: 8px 0; }
-      .tag { font-size: 11px; padding: 2px 6px; border: 1px solid #1a2433; border-radius: 999px; background: #0b1320; color: #93a7c8; }
+      button:hover {
+        filter: brightness(1.1);
+      }
+      .pill {
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid #1a2433;
+        background: #0b1320;
+        font-size: 12px;
+      }
+      .kv {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .small {
+        font-size: 12px;
+        color: #a9c5ff;
+      }
+      .muted {
+        color: #93a7c8;
+      }
+      b {
+        color: #e7f0ff;
+      }
+      .panelTitle {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 6px 8px;
+        align-items: center;
+      }
+      .btnTiny {
+        padding: 4px 8px;
+        border-radius: 8px;
+        font-size: 12px;
+      }
+      .sep {
+        border-top: 1px solid #1a2433;
+        margin: 8px 0;
+      }
+      .tag {
+        font-size: 11px;
+        padding: 2px 6px;
+        border: 1px solid #1a2433;
+        border-radius: 999px;
+        background: #0b1320;
+        color: #93a7c8;
+      }
     </style>
   </head>
   <body>
     <div class="wrap">
       <div>
-        <div class="row" style="margin-bottom: 10px;">
-          <span class="pill" id="modePill"></span>
-          <span class="pill" id="renderPill"></span>
-          <span class="hint">Move WASD/Arrows • Shift+Move run • M map • Enter use • I inventory • B shop • Q quests • G pick up • R renderer • F FOV • P save • O load</span>
+        <div
+          class="row"
+          style="margin-bottom: 10px">
+          <span
+            class="pill"
+            id="modePill"></span>
+          <span
+            class="pill"
+            id="renderPill"></span>
+          <span class="hint"
+            >Move WASD/Arrows • Shift+Move run • M map • Enter use • I inventory • B shop • Q quests • G pick up • R renderer • F FOV • P save • O
+            load</span
+          >
         </div>
 
         <div id="ascii"></div>
 
-        <div id="canvasWrap" style="margin-top: 12px; display:none;">
-          <canvas id="gameCanvas" width="704" height="384"></canvas>
+        <div
+          id="canvasWrap"
+          style="margin-top: 12px; display: none">
+          <canvas
+            id="gameCanvas"
+            width="1024"
+            height="576"></canvas>
         </div>
       </div>
 
       <div id="side">
         <div class="row">
-          <button id="btnAscii">ASCII</button>
+          <button
+            id="btnAscii"
+            style="display: none">
+            ASCII
+          </button>
           <button id="btnCanvas">Canvas</button>
           <button id="btnNewSeed">New Seed</button>
           <button id="btnSave">Save</button>
@@ -107,17 +185,36 @@
           <button id="btnMap">Map</button>
         </div>
 
-        <div class="hint" style="margin-top: 10px;">
-          Overworld: <b>D</b> dungeons, <b>T</b> towns, <b>=</b> roads. Press <b>M</b> for map + auto-walk (Enter to set destination). Dungeons have levels (<b>&gt;</b>/<b>&lt;</b>).
-          Monsters use A* pathing when they can see you.
+        <div
+          class="hint"
+          style="margin-top: 10px">
+          Enjoying the adventure?
+          <a
+            href="https://buymeacoffee.com/figuremodel"
+            target="_blank"
+            rel="noopener"
+            >Buy me a coffee</a
+          >
+          to keep it going.
         </div>
 
-        <div id="stats" style="margin-top: 10px;"></div>
+        <div
+          class="hint"
+          style="margin-top: 10px">
+          Overworld: <b>D</b> dungeons, <b>T</b> towns, <b>=</b> roads. Press <b>M</b> for map + auto-walk (Enter to set destination). Dungeons have
+          levels (<b>&gt;</b>/<b>&lt;</b>). Monsters use A* pathing when they can see you.
+        </div>
+
+        <div
+          id="stats"
+          style="margin-top: 10px"></div>
         <div id="panel"></div>
         <div id="log"></div>
       </div>
     </div>
 
-    <script type="module" src="/src/main.ts"></script>
+    <script
+      type="module"
+      src="/src/main.ts"></script>
   </body>
 </html>
