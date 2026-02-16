@@ -1,4 +1,4 @@
-import type { Action, CharacterClass, Entity, GearRarity, Item, Mode, Point, Shop } from './core/types';
+import type { Action, CharacterClass, CharacterStory, Entity, Gender, GearRarity, Item, Mode, Point, Shop } from './core/types';
 import { Rng } from './core/rng';
 import { add, manhattan } from './core/util';
 import {
@@ -23,8 +23,9 @@ import { renderPanelHtml, type PanelMode } from './ui/panel';
 import { renderOverworldMapAscii } from './ui/map';
 import { aStar } from './systems/astar';
 import { hash2D } from './core/hash';
+import { t } from './i18n';
 
-type RendererMode = 'ascii' | 'canvas';
+type RendererMode = 'ascii' | 'canvas' | 'isometric';
 
 type DungeonStackFrame = {
   baseId: string;
@@ -48,6 +49,7 @@ type GameState = {
 
   player: Entity;
   playerClass: CharacterClass;
+  story: CharacterStory;
   entities: Entity[];
   items: Item[];
 
@@ -107,10 +109,12 @@ type ArmorTemplate = {
   scale: number;
 };
 
+type MonsterKey = 'slime' | 'goblin' | 'orc' | 'wraith';
+
 const CLASS_CONFIG: Record<CharacterClass, ClassConfig> = {
   warrior: {
-    name: 'Warrior',
-    description: 'Brutal melee fighter with crushing swings.',
+    name: t('class.warrior.name'),
+    description: t('class.warrior.desc'),
     maxHp: 28,
     baseAttack: 4,
     baseDefense: 2,
@@ -119,8 +123,8 @@ const CLASS_CONFIG: Record<CharacterClass, ClassConfig> = {
     intellect: 2
   },
   rogue: {
-    name: 'Rogue',
-    description: 'Swift and cunning, striking where it hurts most.',
+    name: t('class.rogue.name'),
+    description: t('class.rogue.desc'),
     maxHp: 22,
     baseAttack: 3,
     baseDefense: 1,
@@ -129,8 +133,8 @@ const CLASS_CONFIG: Record<CharacterClass, ClassConfig> = {
     intellect: 3
   },
   mage: {
-    name: 'Mage',
-    description: 'Master of arcane force that burns through armor.',
+    name: t('class.mage.name'),
+    description: t('class.mage.desc'),
     maxHp: 18,
     baseAttack: 2,
     baseDefense: 0,
@@ -142,16 +146,16 @@ const CLASS_CONFIG: Record<CharacterClass, ClassConfig> = {
 
 const CLASS_GEAR: Record<CharacterClass, ClassGearConfig> = {
   warrior: {
-    weapon: { name: 'Bronze Greataxe', attackBonus: 3, value: 32, upgradeName: 'Tempered Greataxe' },
-    armor: { name: 'Steel Brigandine', defenseBonus: 2, value: 30, upgradeName: 'Runed Plate' }
+    weapon: { name: t('gear.warrior.weapon'), attackBonus: 3, value: 32, upgradeName: t('gear.warrior.weapon.upgrade') },
+    armor: { name: t('gear.warrior.armor'), defenseBonus: 2, value: 30, upgradeName: t('gear.warrior.armor.upgrade') }
   },
   rogue: {
-    weapon: { name: 'Twin Shadow Daggers', attackBonus: 2, value: 28, upgradeName: 'Nightspinner Blades' },
-    armor: { name: 'Silken Jerkin', defenseBonus: 1, value: 26, upgradeName: 'Eclipsed Leathers' }
+    weapon: { name: t('gear.rogue.weapon'), attackBonus: 2, value: 28, upgradeName: t('gear.rogue.weapon.upgrade') },
+    armor: { name: t('gear.rogue.armor'), defenseBonus: 1, value: 26, upgradeName: t('gear.rogue.armor.upgrade') }
   },
   mage: {
-    weapon: { name: 'Amber Focus Staff', attackBonus: 3, value: 30, upgradeName: 'Aetherfire Wand' },
-    armor: { name: 'Warded Robes', defenseBonus: 1, value: 24, upgradeName: 'Arcane Mantle' }
+    weapon: { name: t('gear.mage.weapon'), attackBonus: 3, value: 30, upgradeName: t('gear.mage.weapon.upgrade') },
+    armor: { name: t('gear.mage.armor'), defenseBonus: 1, value: 24, upgradeName: t('gear.mage.armor.upgrade') }
   }
 };
 
@@ -166,62 +170,62 @@ type GearAffix = {
 };
 
 const WEAPON_PREFIXES: readonly GearAffix[] = [
-  { name: 'Sunforged', attackBonus: 1 },
-  { name: 'Stormcall', critChance: 3, attackBonus: 1 },
-  { name: 'Glimmering', critChance: 4 },
-  { name: 'Nightfall', critChance: 2 },
-  { name: 'Emberforged', attackBonus: 1 },
-  { name: 'Voidbound', lifesteal: 3 },
-  { name: 'Ironchant', attackBonus: 1, critChance: 2 },
-  { name: 'Frostvein', critChance: 3 }
+  { name: t('weapon.prefix.sunforged'), attackBonus: 1 },
+  { name: t('weapon.prefix.stormcall'), critChance: 3, attackBonus: 1 },
+  { name: t('weapon.prefix.glimmering'), critChance: 4 },
+  { name: t('weapon.prefix.nightfall'), critChance: 2 },
+  { name: t('weapon.prefix.emberforged'), attackBonus: 1 },
+  { name: t('weapon.prefix.voidbound'), lifesteal: 3 },
+  { name: t('weapon.prefix.ironchant'), attackBonus: 1, critChance: 2 },
+  { name: t('weapon.prefix.frostvein'), critChance: 3 }
 ] as const;
 
 const WEAPON_SUFFIXES: readonly GearAffix[] = [
-  { name: 'of the Fox', critChance: 5 },
-  { name: 'of Embers', attackBonus: 1 },
-  { name: 'of the Depths', lifesteal: 5 },
-  { name: 'of Dawn', critChance: 3 },
-  { name: 'of Ruin', attackBonus: 2 },
-  { name: 'of the Tempest', critChance: 4, attackBonus: 1 },
-  { name: 'of Echoes', lifesteal: 4 }
+  { name: t('weapon.suffix.fox'), critChance: 5 },
+  { name: t('weapon.suffix.embers'), attackBonus: 1 },
+  { name: t('weapon.suffix.depths'), lifesteal: 5 },
+  { name: t('weapon.suffix.dawn'), critChance: 3 },
+  { name: t('weapon.suffix.ruin'), attackBonus: 2 },
+  { name: t('weapon.suffix.tempest'), critChance: 4, attackBonus: 1 },
+  { name: t('weapon.suffix.echoes'), lifesteal: 4 }
 ] as const;
 
 const WEAPON_BASES: readonly WeaponTemplate[] = [
-  { noun: 'Blade', baseAttack: 2, scale: 2 },
-  { noun: 'Halberd', baseAttack: 3, scale: 3 },
-  { noun: 'Longspear', baseAttack: 3, scale: 2 },
-  { noun: 'Warhammer', baseAttack: 4, scale: 4 },
-  { noun: 'Scimitar', baseAttack: 2, scale: 1 },
-  { noun: 'Greatsword', baseAttack: 4, scale: 3 },
-  { noun: 'Quarterstaff', baseAttack: 2, scale: 2 }
+  { noun: t('weapon.base.blade'), baseAttack: 2, scale: 2 },
+  { noun: t('weapon.base.halberd'), baseAttack: 3, scale: 3 },
+  { noun: t('weapon.base.longspear'), baseAttack: 3, scale: 2 },
+  { noun: t('weapon.base.warhammer'), baseAttack: 4, scale: 4 },
+  { noun: t('weapon.base.scimitar'), baseAttack: 2, scale: 1 },
+  { noun: t('weapon.base.greatsword'), baseAttack: 4, scale: 3 },
+  { noun: t('weapon.base.quarterstaff'), baseAttack: 2, scale: 2 }
 ] as const;
 
 const ARMOR_PREFIXES: readonly GearAffix[] = [
-  { name: 'Runeward', defenseBonus: 1 },
-  { name: 'Starwoven', dodgeChance: 3 },
-  { name: 'Stoneplate', defenseBonus: 2 },
-  { name: 'Whispersteel', dodgeChance: 4 },
-  { name: 'Moonlit', dodgeChance: 6 },
-  { name: 'Ashen', thorns: 2 },
-  { name: 'Verdant', thorns: 3 }
+  { name: t('armor.prefix.runeward'), defenseBonus: 1 },
+  { name: t('armor.prefix.starwoven'), dodgeChance: 3 },
+  { name: t('armor.prefix.stoneplate'), defenseBonus: 2 },
+  { name: t('armor.prefix.whispersteel'), dodgeChance: 4 },
+  { name: t('armor.prefix.moonlit'), dodgeChance: 6 },
+  { name: t('armor.prefix.ashen'), thorns: 2 },
+  { name: t('armor.prefix.verdant'), thorns: 3 }
 ] as const;
 
 const ARMOR_SUFFIXES: readonly GearAffix[] = [
-  { name: 'of Resilience', defenseBonus: 1 },
-  { name: 'of the Mirage', dodgeChance: 6 },
-  { name: 'of the Glacier', defenseBonus: 1 },
-  { name: 'of Sparks', thorns: 2 },
-  { name: 'of the Sentinel', defenseBonus: 2 },
-  { name: 'of Cinders', thorns: 3 }
+  { name: t('armor.suffix.resilience'), defenseBonus: 1 },
+  { name: t('armor.suffix.mirage'), dodgeChance: 6 },
+  { name: t('armor.suffix.glacier'), defenseBonus: 1 },
+  { name: t('armor.suffix.sparks'), thorns: 2 },
+  { name: t('armor.suffix.sentinel'), defenseBonus: 2 },
+  { name: t('armor.suffix.cinders'), thorns: 3 }
 ] as const;
 
 const ARMOR_BASES: readonly ArmorTemplate[] = [
-  { noun: 'Vestments', baseDefense: 1, scale: 3 },
-  { noun: 'Scale Mail', baseDefense: 2, scale: 2 },
-  { noun: 'Battlemantle', baseDefense: 2, scale: 3 },
-  { noun: 'Coat', baseDefense: 1, scale: 2 },
-  { noun: 'Carapace', baseDefense: 3, scale: 4 },
-  { noun: 'Guardplate', baseDefense: 3, scale: 3 }
+  { noun: t('armor.base.vestments'), baseDefense: 1, scale: 3 },
+  { noun: t('armor.base.scaleMail'), baseDefense: 2, scale: 2 },
+  { noun: t('armor.base.battlemantle'), baseDefense: 2, scale: 3 },
+  { noun: t('armor.base.coat'), baseDefense: 1, scale: 2 },
+  { noun: t('armor.base.carapace'), baseDefense: 3, scale: 4 },
+  { noun: t('armor.base.guardplate'), baseDefense: 3, scale: 3 }
 ] as const;
 
 type RarityConfig = {
@@ -242,7 +246,7 @@ type RarityConfig = {
 const RARITY_CONFIGS: readonly RarityConfig[] = [
   {
     key: 'common',
-    label: 'Common',
+    label: t('rarity.common.label'),
     namePrefix: '',
     attackBonus: 0,
     defenseBonus: 0,
@@ -256,8 +260,8 @@ const RARITY_CONFIGS: readonly RarityConfig[] = [
   },
   {
     key: 'uncommon',
-    label: 'Uncommon',
-    namePrefix: 'Uncommon',
+    label: t('rarity.uncommon.label'),
+    namePrefix: t('rarity.uncommon.prefix'),
     attackBonus: 1,
     defenseBonus: 1,
     weaponCritChance: 2,
@@ -270,8 +274,8 @@ const RARITY_CONFIGS: readonly RarityConfig[] = [
   },
   {
     key: 'rare',
-    label: 'Rare',
-    namePrefix: 'Rare',
+    label: t('rarity.rare.label'),
+    namePrefix: t('rarity.rare.prefix'),
     attackBonus: 2,
     defenseBonus: 2,
     weaponCritChance: 4,
@@ -284,8 +288,8 @@ const RARITY_CONFIGS: readonly RarityConfig[] = [
   },
   {
     key: 'epic',
-    label: 'Epic',
-    namePrefix: 'Epic',
+    label: t('rarity.epic.label'),
+    namePrefix: t('rarity.epic.prefix'),
     attackBonus: 3,
     defenseBonus: 3,
     weaponCritChance: 6,
@@ -298,8 +302,8 @@ const RARITY_CONFIGS: readonly RarityConfig[] = [
   },
   {
     key: 'legendary',
-    label: 'Legendary',
-    namePrefix: 'Legendary',
+    label: t('rarity.legendary.label'),
+    namePrefix: t('rarity.legendary.prefix'),
     attackBonus: 4,
     defenseBonus: 4,
     weaponCritChance: 9,
@@ -328,16 +332,16 @@ function getShopEconomy(s: GameState, shop: Shop): import('./core/types').ShopEc
   const rng: Rng = new Rng(seed);
 
   const moodRoll: number = rng.nextInt(0, 100);
-  let moodLabel: string = 'Steady';
+  let moodLabel: string = t('shop.mood.steady');
   let buyMultiplier: number = 1.0;
   let sellMultiplier: number = 0.5;
 
   if (moodRoll < 22) {
-    moodLabel = 'Booming';
+    moodLabel = t('shop.mood.booming');
     buyMultiplier = 0.9;
     sellMultiplier = 0.55;
   } else if (moodRoll < 45) {
-    moodLabel = 'Tight';
+    moodLabel = t('shop.mood.tight');
     buyMultiplier = 1.15;
     sellMultiplier = 0.45;
   }
@@ -452,6 +456,69 @@ function ensureClassAttributes(player: Entity, classType: CharacterClass): void 
 
 function randChoice<T>(arr: readonly T[], rng: Rng): T {
   return arr[rng.nextInt(0, arr.length)];
+}
+
+function monsterName(key: MonsterKey): string {
+  return t(`monster.${key}`);
+}
+
+function monsterPlural(key: MonsterKey): string {
+  return t(`monster.${key}.plural`);
+}
+
+type Pronouns = {
+  subject: string;
+  object: string;
+  possessive: string;
+  reflexive: string;
+};
+
+function pronounsFor(gender: Gender): Pronouns {
+  return {
+    subject: t(`pronoun.subject.${gender}`),
+    object: t(`pronoun.object.${gender}`),
+    possessive: t(`pronoun.possessive.${gender}`),
+    reflexive: t(`pronoun.reflexive.${gender}`)
+  };
+}
+
+const STORY_ORIGINS: readonly string[] = ['story.origin.1', 'story.origin.2', 'story.origin.3', 'story.origin.4'];
+const STORY_UPBRINGING: readonly string[] = ['story.upbringing.1', 'story.upbringing.2', 'story.upbringing.3', 'story.upbringing.4'];
+const STORY_TURNING_POINTS: readonly string[] = ['story.turningPoint.1', 'story.turningPoint.2', 'story.turningPoint.3'];
+const STORY_AMBITIONS: readonly string[] = ['story.ambitions.1', 'story.ambitions.2', 'story.ambitions.3'];
+
+function buildStory(rng: Rng, classType: CharacterClass, gender: Gender): CharacterStory {
+  const pronouns = pronounsFor(gender);
+  const className: string = t(`class.${classType}.name`);
+  const vars = {
+    className,
+    gender: t(`gender.${gender}`),
+    subject: pronouns.subject,
+    object: pronouns.object,
+    possessive: pronouns.possessive,
+    reflexive: pronouns.reflexive
+  };
+
+  const origin: string = t(randChoice(STORY_ORIGINS, rng), vars);
+  const upbringing: string = t(randChoice(STORY_UPBRINGING, rng), vars);
+  const turningPoint: string = t(randChoice(STORY_TURNING_POINTS, rng), vars);
+  const ambitions: string = t(randChoice(STORY_AMBITIONS, rng), vars);
+
+  return {
+    origin,
+    upbringing,
+    turningPoint,
+    ambitions,
+    events: []
+  };
+}
+
+function addStoryEvent(state: GameState, titleKey: string, detailKey: string, vars: Record<string, string | number> = {}): void {
+  state.story.events.push({
+    turn: state.turnCounter,
+    title: t(titleKey, vars),
+    detail: t(detailKey, vars)
+  });
 }
 
 function buildItemName(prefix: string | undefined, base: string, suffix: string | undefined): string {
@@ -580,7 +647,7 @@ function ensureStartingGear(state: GameState, classType: CharacterClass): void {
   }
 
   if (messages.length > 0) {
-    state.log.push(`Starting gear equipped: ${messages.join(' & ')}.`);
+    state.log.push(t('item.starting.gear', { items: messages.join(' & ') }));
   }
 }
 
@@ -621,6 +688,15 @@ const renderPill: HTMLElement = document.getElementById('renderPill')!;
 const statsEl: HTMLElement = document.getElementById('stats')!;
 const panelEl: HTMLElement = document.getElementById('panel')!;
 const logEl: HTMLElement = document.getElementById('log')!;
+const controlsHintEl: HTMLElement = document.getElementById('controlsHint')!;
+const supportLeadEl: HTMLElement = document.getElementById('supportLead')!;
+const supportLinkEl: HTMLAnchorElement = document.getElementById('supportLink') as HTMLAnchorElement;
+const supportTailEl: HTMLElement = document.getElementById('supportTail')!;
+const overworldHintEl: HTMLElement = document.getElementById('overworldHint')!;
+const menuActionsLabel: HTMLElement = document.getElementById('menuActionsLabel')!;
+const menuPanelsLabel: HTMLElement = document.getElementById('menuPanelsLabel')!;
+const menuRenderLabel: HTMLElement = document.getElementById('menuRenderLabel')!;
+const genderLabel: HTMLElement = document.getElementById('genderLabel')!;
 
 const btnAscii: HTMLButtonElement = document.getElementById('btnAscii') as HTMLButtonElement;
 const btnCanvas: HTMLButtonElement = document.getElementById('btnCanvas') as HTMLButtonElement;
@@ -631,6 +707,7 @@ const btnExportSave: HTMLButtonElement = document.getElementById('btnExportSave'
 const btnImportSave: HTMLButtonElement = document.getElementById('btnImportSave') as HTMLButtonElement;
 const btnInv: HTMLButtonElement = document.getElementById('btnInv') as HTMLButtonElement;
 const btnShop: HTMLButtonElement = document.getElementById('btnShop') as HTMLButtonElement;
+const btnStory: HTMLButtonElement = document.getElementById('btnStory') as HTMLButtonElement;
 const btnMap: HTMLButtonElement = document.getElementById('btnMap') as HTMLButtonElement;
 
 const canvas: HTMLCanvasElement = document.getElementById('gameCanvas') as HTMLCanvasElement;
@@ -639,7 +716,10 @@ const PIXI_VIEW_W: number = Math.max(1, Math.floor(canvas.width / 16) - 1);
 const PIXI_VIEW_H: number = Math.max(1, Math.floor(canvas.height / 16) - 1);
 
 const classModal: HTMLElement = document.getElementById('classSelect')!;
+const classSelectTitle: HTMLElement = document.getElementById('classSelectTitle')!;
+const classSelectSubtitle: HTMLElement = document.getElementById('classSelectSubtitle')!;
 const classButtons: HTMLButtonElement[] = Array.from(classModal.querySelectorAll<HTMLButtonElement>('[data-class]'));
+const genderSelect: HTMLSelectElement = document.getElementById('genderSelect') as HTMLSelectElement;
 const btnLoadFromModal: HTMLButtonElement = document.getElementById('btnLoadFromModal') as HTMLButtonElement;
 
 const saveModal: HTMLElement = document.getElementById('saveModal')!;
@@ -655,18 +735,89 @@ let saveModalMode: SaveModalMode = 'export';
 
 let pendingSeed: number = Date.now() & 0xffffffff;
 let pendingClass: CharacterClass = 'warrior';
+let pendingGender: Gender = 'female';
 canvasWrap.classList.add('displayNone');
 btnAscii.style.display = 'none';
 
-function newGame(worldSeed: number, classChoice: CharacterClass): GameState {
+function applyStaticI18n(): void {
+  document.title = t('app.title');
+  controlsHintEl.textContent = t('ui.hint.controls');
+  supportLeadEl.textContent = t('ui.support.cta');
+  supportLinkEl.textContent = t('ui.support.linkText');
+  supportTailEl.textContent = t('ui.support.tail');
+  overworldHintEl.innerHTML = t('ui.overworld.hint', {
+    dungeonKey: '<b>D</b>',
+    townKey: '<b>T</b>',
+    roadKey: '<b>=</b>',
+    mapKey: '<b>M</b>',
+    enterKey: '<b>Enter</b>',
+    downKey: '<b>&gt;</b>',
+    upKey: '<b>&lt;</b>'
+  });
+
+  menuActionsLabel.textContent = t('ui.menu.actions');
+  menuPanelsLabel.textContent = t('ui.menu.panels');
+  menuRenderLabel.textContent = t('ui.menu.render');
+  genderLabel.textContent = t('ui.gender.label');
+
+  btnAscii.textContent = t('ui.buttons.ascii');
+  btnCanvas.textContent = t('ui.buttons.canvas');
+  btnNewSeed.textContent = t('ui.buttons.newSeed');
+  btnSave.textContent = t('ui.buttons.save');
+  btnLoad.textContent = t('ui.buttons.load');
+  btnExportSave.textContent = t('ui.buttons.exportSave');
+  btnImportSave.textContent = t('ui.buttons.importSave');
+  btnInv.textContent = t('ui.buttons.inventory');
+  btnShop.textContent = t('ui.buttons.shop');
+  btnStory.textContent = t('ui.buttons.story');
+  btnMap.textContent = t('ui.buttons.map');
+
+  classSelectTitle.textContent = t('ui.classSelect.title');
+  classSelectSubtitle.textContent = t('ui.classSelect.subtitle');
+  btnLoadFromModal.textContent = t('ui.classSelect.load');
+
+  const genderOptions: Array<{ key: Gender; label: string }> = [
+    { key: 'female', label: t('gender.female') },
+    { key: 'male', label: t('gender.male') },
+    { key: 'nonbinary', label: t('gender.nonbinary') }
+  ];
+  genderSelect.innerHTML = '';
+  for (const option of genderOptions) {
+    const opt = document.createElement('option');
+    opt.value = option.key;
+    opt.textContent = option.label;
+    genderSelect.appendChild(opt);
+  }
+  genderSelect.value = pendingGender;
+
+  classButtons.forEach((btn) => {
+    const classType: CharacterClass | undefined = btn.dataset.class as CharacterClass | undefined;
+    if (!classType) {
+      return;
+    }
+    const cfg: ClassConfig = CLASS_CONFIG[classType];
+    const modalDesc: string = t(`class.${classType}.modal`);
+    const statLine: string = t('class.stats.line', { str: cfg.strength, agi: cfg.agility, int: cfg.intellect });
+    btn.innerHTML = `<strong>${escapeHtml(cfg.name)}</strong><span>${escapeHtml(modalDesc)}</span><small>${escapeHtml(statLine)}</small>`;
+  });
+
+  btnSaveModalCopy.textContent = t('ui.saveModal.copy');
+  btnSaveModalLoad.textContent = t('ui.saveModal.load');
+  btnSaveModalClose.textContent = t('ui.saveModal.close');
+}
+
+applyStaticI18n();
+
+function newGame(worldSeed: number, classChoice: CharacterClass, gender: Gender): GameState {
   const rng: Rng = new Rng(worldSeed);
   const overworld: Overworld = new Overworld(worldSeed);
   const cfg: ClassConfig = CLASS_CONFIG[classChoice];
+  const story: CharacterStory = buildStory(rng, classChoice, gender);
 
   const player: Entity = {
     id: 'player',
     kind: 'player',
-    name: 'You',
+    name: t('entity.playerName'),
     glyph: '@',
     pos: findStartPosition(overworld, rng),
     mapRef: { kind: 'overworld' },
@@ -680,6 +831,7 @@ function newGame(worldSeed: number, classChoice: CharacterClass): GameState {
     inventory: [],
     equipment: {},
     classType: classChoice,
+    gender,
     strength: cfg.strength,
     agility: cfg.agility,
     intellect: cfg.intellect,
@@ -698,10 +850,11 @@ function newGame(worldSeed: number, classChoice: CharacterClass): GameState {
     townReturnPos: undefined,
     player,
     playerClass: classChoice,
+    story,
     entities: [player],
     items: [],
     shops: new Map<string, Shop>(),
-    rendererMode: 'canvas',
+    rendererMode: 'isometric',
     useFov: true,
     activePanel: 'none',
     shopCategory: 'all',
@@ -714,11 +867,12 @@ function newGame(worldSeed: number, classChoice: CharacterClass): GameState {
     log: new MessageLog(160)
   };
 
-  state.log.push('Welcome. Find a town (T) to shop or a dungeon (D) to descend.');
-  state.log.push('I inventory • B shop (town) • Q quests (town) • G pick up items in dungeons.');
-  state.log.push('P save • O load • R renderer • F FOV');
-  state.log.push(`Class: ${cfg.name} • Str ${cfg.strength} • Agi ${cfg.agility} • Int ${cfg.intellect}.`);
+  state.log.push(t('log.welcome'));
+  state.log.push(t('log.controls'));
+  state.log.push(t('log.controls.system'));
+  state.log.push(t('log.classStats', { name: cfg.name, str: cfg.strength, agi: cfg.agility, int: cfg.intellect }));
   ensureStartingGear(state, classChoice);
+  addStoryEvent(state, 'story.event.begin.title', 'story.event.begin.detail', { className: cfg.name });
   return state;
 }
 
@@ -733,7 +887,7 @@ function findStartPosition(overworld: Overworld, rng: Rng): Point {
   return { x: 0, y: 0 };
 }
 
-let state: GameState = newGame(pendingSeed, pendingClass);
+let state: GameState = newGame(pendingSeed, pendingClass, pendingGender);
 
 function hideClassModal(): void {
   classModal.classList.add('hidden');
@@ -749,7 +903,9 @@ function isClassModalVisible(): boolean {
 
 function startNewRun(classChoice: CharacterClass): void {
   pendingClass = classChoice;
-  state = newGame(pendingSeed, classChoice);
+  const gender = (genderSelect.value as Gender) || pendingGender;
+  pendingGender = gender;
+  state = newGame(pendingSeed, classChoice, gender);
   hideClassModal();
   syncRendererUi();
   render();
@@ -824,7 +980,7 @@ function createMonsterForDepth(depth: number, roll: number, rng: Rng, dungeonId:
     return {
       id: `m_${dungeonId}_${i}`,
       kind: 'monster',
-      name: 'Slime',
+      name: monsterName('slime'),
       glyph: 's',
       pos: p,
       mapRef: { kind: 'dungeon', dungeonId },
@@ -844,7 +1000,7 @@ function createMonsterForDepth(depth: number, roll: number, rng: Rng, dungeonId:
     return {
       id: `m_${dungeonId}_${i}`,
       kind: 'monster',
-      name: 'Goblin',
+      name: monsterName('goblin'),
       glyph: 'g',
       pos: p,
       mapRef: { kind: 'dungeon', dungeonId },
@@ -864,7 +1020,7 @@ function createMonsterForDepth(depth: number, roll: number, rng: Rng, dungeonId:
     return {
       id: `m_${dungeonId}_${i}`,
       kind: 'monster',
-      name: 'Wraith',
+      name: monsterName('wraith'),
       glyph: 'w',
       pos: p,
       mapRef: { kind: 'dungeon', dungeonId },
@@ -885,7 +1041,7 @@ function createMonsterForDepth(depth: number, roll: number, rng: Rng, dungeonId:
   return {
     id: `m_${dungeonId}_${i}`,
     kind: 'monster',
-    name: 'Orc',
+    name: monsterName('orc'),
     glyph: 'O',
     pos: p,
     mapRef: { kind: 'dungeon', dungeonId },
@@ -905,23 +1061,23 @@ function createMonsterForDepth(depth: number, roll: number, rng: Rng, dungeonId:
 function bossNameForTheme(theme: DungeonTheme): string {
   switch (theme) {
     case 'caves':
-      return 'Cave Broodlord';
+      return t('boss.caves');
     case 'crypt':
-      return 'Crypt Lich';
+      return t('boss.crypt');
     case 'ruins':
     default:
-      return 'Ruin Warden';
+      return t('boss.ruins');
   }
 }
 
 function bossNameForDepth(depth: number): string {
   if (depth < 3) {
-    return 'Ruin Warden';
+    return t('boss.ruins');
   }
   if (depth < 6) {
-    return 'Cave Broodlord';
+    return t('boss.caves');
   }
-  return 'Crypt Lich';
+  return t('boss.crypt');
 }
 
 function spawnBossInDungeon(s: GameState, dungeon: Dungeon, seed: number): void {
@@ -973,7 +1129,7 @@ function spawnLootInDungeon(s: GameState, dungeon: Dungeon, seed: number): void 
       item = {
         id: baseId,
         kind: 'potion',
-        name: dungeon.depth >= 4 ? 'Greater Healing Potion' : 'Healing Potion',
+        name: dungeon.depth >= 4 ? t('item.potion.greater') : t('item.potion.healing'),
         healAmount: 8 + dungeon.depth * 2,
         value: 10 + dungeon.depth * 2
       };
@@ -1003,8 +1159,8 @@ function getActiveTownId(): string | undefined {
   if (state.mode !== 'overworld') {
     return undefined;
   }
-  const t = state.overworld.getTile(state.player.pos.x, state.player.pos.y);
-  if (t !== 'town' && !t.startsWith('town_')) {
+  const tile = state.overworld.getTile(state.player.pos.x, state.player.pos.y);
+  if (tile !== 'town' && !tile.startsWith('town_')) {
     return undefined;
   }
   const center: Point | undefined = state.overworld.getTownCenter(state.player.pos.x, state.player.pos.y);
@@ -1028,7 +1184,7 @@ function ensureQuestForTown(s: GameState, townPos: Point): void {
   const rng: Rng = new Rng(seed);
 
   const questCount: number = 1 + rng.nextInt(0, 2);
-  const monsterPool: string[] = ['Slime', 'Goblin', 'Orc'];
+  const monsterPool: MonsterKey[] = ['slime', 'goblin', 'orc'];
   for (let i: number = 0; i < questCount; i++) {
     const questRoll: number = rng.nextInt(0, 100);
 
@@ -1042,7 +1198,7 @@ function ensureQuestForTown(s: GameState, townPos: Point): void {
         id: `q_${townId}_${i}`,
         townId,
         kind: 'killMonsters',
-        description: `Clear threats: defeat ${targetCount} monsters (depth ≥ ${minDepth})`,
+        description: t('quest.killMonsters.desc', { count: targetCount, depth: minDepth }),
         targetCount,
         currentCount: 0,
         minDungeonDepth: minDepth,
@@ -1063,15 +1219,16 @@ function ensureQuestForTown(s: GameState, townPos: Point): void {
       const targetCount: number = 4 + rng.nextInt(0, 6);
       const rewardGold: number = 22 + minDepth * 12 + rng.nextInt(0, 12);
       const rewardXp: number = 20 + minDepth * 9 + rng.nextInt(0, 10);
-      const targetPool: string[] = minDepth >= 2 ? [...monsterPool, 'Wraith'] : monsterPool;
-      const targetMonster: string = targetPool[rng.nextInt(0, targetPool.length)];
-      const targetLabel: string = targetMonster.endsWith('s') ? targetMonster : `${targetMonster}s`;
+      const targetPool: MonsterKey[] = minDepth >= 2 ? [...monsterPool, 'wraith'] : monsterPool;
+      const targetKey: MonsterKey = targetPool[rng.nextInt(0, targetPool.length)];
+      const targetMonster: string = monsterName(targetKey);
+      const targetLabel: string = monsterPlural(targetKey);
 
       const q: import('./core/types').Quest = {
         id: `q_${townId}_${i}`,
         townId,
         kind: 'slayMonster',
-        description: `Cull ${targetCount} ${targetLabel} (depth ≥ ${minDepth})`,
+        description: t('quest.slayMonsters.desc', { count: targetCount, target: targetLabel, depth: minDepth }),
         targetCount,
         currentCount: 0,
         targetMonster,
@@ -1096,7 +1253,7 @@ function ensureQuestForTown(s: GameState, townPos: Point): void {
         id: `q_${townId}_${i}`,
         townId,
         kind: 'reachDepth',
-        description: `Descend to depth ${targetDepth}.`,
+        description: t('quest.reachDepth.desc', { depth: targetDepth }),
         targetCount: targetDepth,
         currentCount: 0,
         targetDepth,
@@ -1121,7 +1278,7 @@ function ensureQuestForTown(s: GameState, townPos: Point): void {
       id: `q_${townId}_${i}`,
       townId,
       kind: 'slayBoss',
-      description: `Slay the ${bossName} (depth ≥ ${bossDepth}).`,
+      description: t('quest.slayBoss.desc', { boss: bossName, depth: bossDepth }),
       targetCount: 1,
       currentCount: 0,
       targetMonster: bossName,
@@ -1177,7 +1334,7 @@ function createBossRelicItem(rng: Rng, id: string, slot: 'weapon' | 'armor', pow
     item.rarity = 'legendary';
     item.attackBonus = (item.attackBonus ?? 0) + 3;
     item.value = Math.round(item.value * 2.4);
-    item.name = `${bossName} Relic Blade`;
+    item.name = t('item.relic.blade', { bossName });
     return item;
   }
 
@@ -1185,7 +1342,7 @@ function createBossRelicItem(rng: Rng, id: string, slot: 'weapon' | 'armor', pow
   item.rarity = 'legendary';
   item.defenseBonus = (item.defenseBonus ?? 0) + 2;
   item.value = Math.round(item.value * 2.4);
-  item.name = `${bossName} Relic Aegis`;
+  item.name = t('item.relic.aegis', { bossName });
   return item;
 }
 
@@ -1210,7 +1367,8 @@ function dropBossLoot(s: GameState, boss: Entity): void {
   item.mapRef = { kind: 'dungeon', dungeonId: dungeon.id };
   item.pos = { x: boss.pos.x, y: boss.pos.y };
   s.items.push(item);
-  s.log.push(`${boss.name} drops ${item.name}.`);
+  s.log.push(t('log.boss.drop', { boss: boss.name, item: item.name }));
+  addStoryEvent(s, 'story.event.boss.title', 'story.event.boss.detail', { boss: boss.name, depth: dungeon.depth });
 }
 
 function pickQuestRewardType(rng: Rng): string {
@@ -1232,7 +1390,7 @@ function createQuestRewardItem(s: GameState, rng: Rng, questId: string, power: n
       const item: Item = {
         id,
         kind: 'potion',
-        name: power >= 4 ? 'Greater Healing Potion' : 'Healing Potion',
+        name: power >= 4 ? t('item.potion.greater') : t('item.potion.healing'),
         healAmount,
         value: 10 + power * 2
       };
@@ -1285,7 +1443,7 @@ function recordKillForQuests(s: GameState, dungeonDepth: number, monsterName: st
     if (q.currentCount >= q.targetCount) {
       q.currentCount = q.targetCount;
       q.completed = true;
-      s.log.push(`Quest complete: ${q.description}. Return to town to turn in (Q).`);
+      s.log.push(t('log.quest.complete', { desc: q.description }));
     }
   }
 }
@@ -1303,7 +1461,7 @@ function recordDepthForQuests(s: GameState, dungeonDepth: number): void {
     if (q.currentCount >= q.targetCount) {
       q.currentCount = q.targetCount;
       q.completed = true;
-      s.log.push(`Quest complete: ${q.description}. Return to town to turn in (Q).`);
+      s.log.push(t('log.quest.complete', { desc: q.description }));
     }
   }
 }
@@ -1317,7 +1475,7 @@ function applyStatusEffectsStartOfTurn(s: GameState): void {
   for (const eff of effects) {
     if (eff.kind === 'poison') {
       s.player.hp -= eff.potency;
-      s.log.push(`Poison deals ${eff.potency} damage. (${Math.max(0, s.player.hp)}/${s.player.maxHp})`);
+      s.log.push(t('log.poison.tick', { dmg: eff.potency, hp: Math.max(0, s.player.hp), maxHp: s.player.maxHp }));
     }
     eff.remainingTurns -= 1;
   }
@@ -1325,13 +1483,13 @@ function applyStatusEffectsStartOfTurn(s: GameState): void {
   s.player.statusEffects = effects.filter((e) => e.remainingTurns > 0);
 
   if (s.player.hp <= 0) {
-    s.log.push('You succumb to your wounds.');
+    s.log.push(t('log.poison.death'));
   }
 }
 
 function maybeApplyPoisonFromAttacker(attacker: Entity): void {
   // Slimes have a chance to poison.
-  if (attacker.name !== 'Slime') {
+  if (attacker.name !== monsterName('slime')) {
     return;
   }
   const roll: number = state.rng.nextInt(0, 100);
@@ -1348,7 +1506,7 @@ function maybeApplyPoisonFromAttacker(attacker: Entity): void {
     effects.push({ kind: 'poison', remainingTurns: 5, potency: 1 });
   }
   state.player.statusEffects = effects;
-  state.log.push('You are poisoned!');
+  state.log.push(t('log.poisoned'));
 }
 
 function maybeRestockShop(s: GameState, shop: Shop): void {
@@ -1375,7 +1533,7 @@ function maybeRestockShop(s: GameState, shop: Shop): void {
 
     let item: Item;
     if (roll < 45) {
-      item = { id: itemId, kind: 'potion', name: 'Healing Potion', healAmount: 10, value: 14 };
+      item = { id: itemId, kind: 'potion', name: t('item.potion.healing'), healAmount: 10, value: 14 };
     } else if (roll < 75) {
       const power: number = tierLevel + rng.nextInt(0, 2);
       item = generateWeaponLoot(itemId, power, rng);
@@ -1391,7 +1549,7 @@ function maybeRestockShop(s: GameState, shop: Shop): void {
   addClassGearToShop(s, shop.id, stock, Math.max(1, Math.floor(s.turnCounter / SHOP_RESTOCK_INTERVAL)), rng);
 
   shop.stockItemIds = stock;
-  s.log.push('The shop has new stock.');
+  s.log.push(t('log.shop.restock'));
 }
 
 function addClassGearToShop(s: GameState, shopId: string, stock: string[], tier: number, rng: Rng): void {
@@ -1437,7 +1595,7 @@ function ensureShopForTown(s: GameState, townPos: Point): Shop {
     let item: Item;
 
     if (roll < 45) {
-      item = { id: itemId, kind: 'potion', name: 'Healing Potion', healAmount: 10, value: 14 };
+      item = { id: itemId, kind: 'potion', name: t('item.potion.healing'), healAmount: 10, value: 14 };
     } else if (roll < 75) {
       const power: number = 1 + rng.nextInt(0, 2);
       item = generateWeaponLoot(itemId, power, rng);
@@ -1473,6 +1631,37 @@ function getTownTileAtPlayer(): import('./core/types').TownTile | undefined {
   return getTownTile(town, state.player.pos.x, state.player.pos.y);
 }
 
+function isAtOrNearTownGate(): boolean {
+  if (state.mode !== 'town') {
+    return false;
+  }
+  const town: Town | undefined = getCurrentTown(state);
+  if (!town) {
+    return false;
+  }
+  const px: number = state.player.pos.x;
+  const py: number = state.player.pos.y;
+  const current: import('./core/types').TownTile = getTownTile(town, px, py);
+  if (current === 'gate' || current === 'road') {
+    return true;
+  }
+  const neighbors: Point[] = [
+    { x: px + 1, y: py },
+    { x: px - 1, y: py },
+    { x: px, y: py + 1 },
+    { x: px, y: py - 1 }
+  ];
+  for (const n of neighbors) {
+    if (n.x < 0 || n.y < 0 || n.x >= town.width || n.y >= town.height) {
+      continue;
+    }
+    if (getTownTile(town, n.x, n.y) === 'gate') {
+      return true;
+    }
+  }
+  return false;
+}
+
 function canOpenShopHere(): boolean {
   return state.mode === 'town' && getTownTileAtPlayer() === 'shop';
 }
@@ -1488,8 +1677,8 @@ function getActiveTownWorldPos(): Point | undefined {
   if (state.mode !== 'overworld') {
     return undefined;
   }
-  const t = state.overworld.getTile(state.player.pos.x, state.player.pos.y);
-  if (t === 'town' || t.startsWith('town_')) {
+  const tile = state.overworld.getTile(state.player.pos.x, state.player.pos.y);
+  if (tile === 'town' || tile.startsWith('town_')) {
     return { x: state.player.pos.x, y: state.player.pos.y };
   }
   return undefined;
@@ -1505,8 +1694,8 @@ function removeDeadEntities(s: GameState): void {
 
 function handleAction(action: Action): void {
   if (action.kind === 'toggleRenderer') {
-    state.rendererMode = 'canvas';
-    state.log.push('Renderer locked to PixiJS for now.');
+    state.rendererMode = state.rendererMode === 'isometric' ? 'canvas' : 'isometric';
+    state.log.push(state.rendererMode === 'isometric' ? t('log.renderer.iso') : t('log.renderer.topdown'));
     syncRendererUi();
     render();
     return;
@@ -1514,7 +1703,7 @@ function handleAction(action: Action): void {
 
   if (action.kind === 'toggleFov') {
     state.useFov = !state.useFov;
-    state.log.push(state.useFov ? 'FOV enabled.' : 'FOV disabled.');
+    state.log.push(state.useFov ? t('log.fov.on') : t('log.fov.off'));
     render();
     return;
   }
@@ -1532,7 +1721,7 @@ function handleAction(action: Action): void {
       return;
     }
     if (!canOpenShopHere()) {
-      state.log.push('Find the shop building to trade.');
+      state.log.push(t('log.shop.find'));
       render();
       return;
     }
@@ -1550,7 +1739,7 @@ function handleAction(action: Action): void {
 
   if (action.kind === 'toggleMap') {
     if (state.mode !== 'overworld') {
-      state.log.push('Map is only available on the overworld.');
+      state.log.push(t('log.map.overworldOnly'));
       render();
       return;
     }
@@ -1559,7 +1748,7 @@ function handleAction(action: Action): void {
     state.activePanel = 'none';
     state.mapCursor = { x: 0, y: 0 };
     if (state.mapOpen) {
-      state.log.push('Map open: move cursor with WASD/Arrows, Enter to set destination, Esc/M to close, C to cancel auto-walk.');
+      state.log.push(t('log.map.open'));
     }
     render();
     return;
@@ -1568,7 +1757,7 @@ function handleAction(action: Action): void {
   if (action.kind === 'cancelAuto') {
     state.destination = undefined;
     state.autoPath = undefined;
-    state.log.push('Auto-walk canceled.');
+    state.log.push(t('log.autoWalk.cancel'));
     render();
     return;
   }
@@ -1580,7 +1769,7 @@ function handleAction(action: Action): void {
       return;
     }
     if (!canOpenQuestHere()) {
-      state.log.push('Visit the tavern to check bounties.');
+      state.log.push(t('log.quest.find'));
       render();
       return;
     }
@@ -1591,6 +1780,12 @@ function handleAction(action: Action): void {
       const shopNow: Shop = ensureShopForTown(state, townPos);
       maybeRestockShop(state, shopNow);
     }
+    render();
+    return;
+  }
+
+  if (action.kind === 'toggleStory') {
+    state.activePanel = state.activePanel === 'story' ? 'none' : 'story';
     render();
     return;
   }
@@ -1609,9 +1804,7 @@ function handleAction(action: Action): void {
   }
 
   if (action.kind === 'help') {
-    state.log.push(
-      'Keys: WASD/Arrows move • Shift+Move run (overworld) • M map • Enter use • I inventory • B shop (shop) • Q quests (tavern) • G pick up • R renderer • F FOV • P save • O load.'
-    );
+    state.log.push(t('log.help'));
     render();
     return;
   }
@@ -1634,7 +1827,7 @@ function handleAction(action: Action): void {
   removeDeadEntities(state);
 
   if (state.player.hp <= 0) {
-    state.log.push('You died. Press New Seed to restart.');
+    state.log.push(t('log.death.restart'));
   }
 
   render();
@@ -1650,7 +1843,7 @@ function playerTurn(action: Action): boolean {
     if (action.kind === 'move' || action.kind === 'wait') {
       const next: Point = state.autoPath[1];
       if (!canEnterOverworldTile(state.overworld, next)) {
-        state.log.push('Auto-walk blocked.');
+        state.log.push(t('log.autoWalk.blocked'));
         state.destination = undefined;
         state.autoPath = undefined;
         return false;
@@ -1660,17 +1853,17 @@ function playerTurn(action: Action): boolean {
       state.autoPath = state.autoPath.slice(1);
 
       if (state.destination && state.player.pos.x === state.destination.x && state.player.pos.y === state.destination.y) {
-        state.log.push('Arrived at destination.');
+        state.log.push(t('log.autoWalk.arrived'));
         state.destination = undefined;
         state.autoPath = undefined;
       }
 
-      const t = state.overworld.getTile(state.player.pos.x, state.player.pos.y);
-      if (t === 'dungeon') {
-        state.log.push('Dungeon entrance found. Press Enter to enter.');
+      const tile = state.overworld.getTile(state.player.pos.x, state.player.pos.y);
+      if (tile === 'dungeon') {
+        state.log.push(t('log.autoWalk.dungeonFound'));
       }
-      if (t === 'town_gate') {
-        state.log.push('Town gate found. Press Enter to enter.');
+      if (tile === 'town_gate') {
+        state.log.push(t('log.autoWalk.townFound'));
       }
 
       return true;
@@ -1678,7 +1871,7 @@ function playerTurn(action: Action): boolean {
   }
 
   if (action.kind === 'wait') {
-    state.log.push('You wait.');
+    state.log.push(t('log.wait'));
     return true;
   }
 
@@ -1692,12 +1885,12 @@ function playerTurn(action: Action): boolean {
         enterDungeonAt(state.player.pos);
         return true;
       }
-      const t = state.overworld.getTile(state.player.pos.x, state.player.pos.y);
-      if (t === 'town_gate') {
+      const tile = state.overworld.getTile(state.player.pos.x, state.player.pos.y);
+      if (tile === 'town_gate') {
         enterTownAt(state.player.pos);
         return true;
       }
-      state.log.push('Nothing to use here.');
+      state.log.push(t('log.use.none'));
       return false;
     } else if (state.mode === 'dungeon') {
       const dungeon: Dungeon | undefined = getCurrentDungeon(state);
@@ -1715,14 +1908,19 @@ function playerTurn(action: Action): boolean {
         return true;
       }
 
-      state.log.push('Nothing to use here.');
+      state.log.push(t('log.use.none'));
       return false;
     } else {
       const town: Town | undefined = getCurrentTown(state);
       if (!town) {
         return false;
       }
-      state.log.push('Find the town gate to leave.');
+      if (isAtOrNearTownGate()) {
+        state.log.push(t('log.town.exitSlip'));
+        exitTownToOverworld();
+        return true;
+      }
+      state.log.push(t('log.town.exitFind'));
       return false;
     }
   }
@@ -1737,7 +1935,7 @@ function playerTurn(action: Action): boolean {
 function pickupAtPlayer(): boolean {
   const dungeon: Dungeon | undefined = getCurrentDungeon(state);
   if (state.mode !== 'dungeon' || !dungeon) {
-    state.log.push('You can only pick up items inside dungeons (for now).');
+    state.log.push(t('log.pickup.onlyDungeon'));
     return false;
   }
 
@@ -1756,12 +1954,12 @@ function pickupAtPlayer(): boolean {
       it.mapRef = undefined;
       it.pos = undefined;
       state.player.inventory.push(it.id);
-      state.log.push(`Picked up: ${it.name}.`);
+      state.log.push(t('item.pickup', { name: it.name }));
       return true;
     }
   }
 
-  state.log.push('Nothing to pick up.');
+  state.log.push(t('log.pickup.none'));
   return false;
 }
 
@@ -1806,7 +2004,7 @@ function tryMovePlayer(dx: number, dy: number): boolean {
 
     state.player.pos = target;
     if (getTownTile(town, target.x, target.y) === 'gate') {
-      state.log.push('You pass through the town gate.');
+      state.log.push(t('log.town.passGate'));
       exitTownToOverworld();
     }
     return true;
@@ -1831,12 +2029,12 @@ function tryMovePlayer(dx: number, dy: number): boolean {
     state.destination = undefined;
     state.autoPath = undefined;
 
-    const t = state.overworld.getTile(next.x, next.y);
-    if (t === 'dungeon') {
-      state.log.push('Dungeon entrance found. Press Enter to enter.');
+    const tile = state.overworld.getTile(next.x, next.y);
+    if (tile === 'dungeon') {
+      state.log.push(t('log.map.dungeonFound'));
     }
-    if (t === 'town_gate') {
-      state.log.push('Town gate found. Press Enter to enter.');
+    if (tile === 'town_gate') {
+      state.log.push(t('log.map.townFound'));
     }
   }
 
@@ -1952,12 +2150,20 @@ function awardXp(amount: number): void {
     state.player.level += 1;
     const gains: LevelUpGains = applyLevelUpGrowth(state.player, state.playerClass);
     state.player.hp = state.player.maxHp;
-    state.log.push(`*** Level up! You are now level ${state.player.level}. ***`);
-    const gainParts: string[] = [`+${gains.hp} HP`, `+${gains.attack} Atk`];
+    state.log.push(t('log.levelUp', { level: state.player.level }));
+    addStoryEvent(state, 'story.event.levelUp.title', 'story.event.levelUp.detail', { level: state.player.level });
+    const gainParts: string[] = [t('log.levelUp.gain.hp', { value: gains.hp }), t('log.levelUp.gain.atk', { value: gains.attack })];
     if (gains.defense > 0) {
-      gainParts.push(`+${gains.defense} Def`);
+      gainParts.push(t('log.levelUp.gain.def', { value: gains.defense }));
     }
-    state.log.push(`Gains: ${gainParts.join(', ')}. Str ${state.player.strength} • Agi ${state.player.agility} • Int ${state.player.intellect}.`);
+    state.log.push(
+      t('log.levelUp.gains', {
+        gains: gainParts.join(', '),
+        str: state.player.strength ?? 0,
+        agi: state.player.agility ?? 0,
+        int: state.player.intellect ?? 0
+      })
+    );
   }
 }
 
@@ -1972,13 +2178,13 @@ function attack(attacker: Entity, defender: Entity): void {
 
   let damageMultiplier: number = 1;
   const suffixParts: string[] = [];
-  let playerVerb: string = 'hit';
+  let playerVerb: string = t('combat.verb.hit');
   let critChance: number = 0;
 
   if (defender.kind === 'player') {
     const dodgeChance: number = Math.min(50, getEquippedDodgeChance(defender));
     if (dodgeChance > 0 && state.rng.nextInt(0, 100) < dodgeChance) {
-      state.log.push('You dodge the attack.');
+      state.log.push(t('log.combat.dodge'));
       return;
     }
   }
@@ -1991,14 +2197,14 @@ function attack(attacker: Entity, defender: Entity): void {
       case 'warrior': {
         const strength: number = attacker.strength ?? 0;
         atk += Math.floor(strength / 2);
-        playerVerb = 'cleave';
+        playerVerb = t('combat.verb.cleave');
         break;
       }
       case 'rogue': {
         const agility: number = attacker.agility ?? 0;
         atk += Math.floor(agility / 2);
         critChance = Math.min(60, 10 + agility * 4);
-        playerVerb = 'stab';
+        playerVerb = t('combat.verb.stab');
         break;
       }
       case 'mage':
@@ -2007,9 +2213,9 @@ function attack(attacker: Entity, defender: Entity): void {
         atk += Math.floor(intellect / 2);
         def = Math.floor(def * 0.5);
         if (def < originalDef) {
-          suffixParts.push('armor melts');
+          suffixParts.push(t('combat.suffix.armorMelts'));
         }
-        playerVerb = 'blast';
+        playerVerb = t('combat.verb.blast');
         break;
       }
     }
@@ -2017,10 +2223,10 @@ function attack(attacker: Entity, defender: Entity): void {
     critChance = Math.min(75, critChance + getEquippedCritChance(attacker));
     if (critChance > 0 && state.rng.nextInt(0, 100) < critChance) {
       damageMultiplier = 2;
-      if (playerVerb === 'stab') {
-        playerVerb = 'backstab';
+      if (playerVerb === t('combat.verb.stab')) {
+        playerVerb = t('combat.verb.backstab');
       }
-      suffixParts.push('critical!');
+      suffixParts.push(t('combat.suffix.critical'));
     }
   }
 
@@ -2037,7 +2243,7 @@ function attack(attacker: Entity, defender: Entity): void {
       const heal: number = Math.min(attacker.maxHp - attacker.hp, Math.floor((dmg * lifesteal) / 100));
       if (heal > 0) {
         attacker.hp += heal;
-        state.log.push(`Life steal restores ${heal} HP.`);
+        state.log.push(t('log.combat.lifesteal', { amount: heal }));
       }
     }
   }
@@ -2046,13 +2252,13 @@ function attack(attacker: Entity, defender: Entity): void {
     const thorns: number = Math.min(20, getEquippedThorns(defender));
     if (thorns > 0) {
       attacker.hp -= thorns;
-      state.log.push(`${attacker.name} takes ${thorns} thorns damage.`);
+      state.log.push(t('log.combat.thorns', { name: attacker.name, amount: thorns }));
       if (attacker.hp <= 0) {
-        state.log.push(`${attacker.name} dies.`);
+        state.log.push(t('log.combat.dies', { name: attacker.name }));
         const xp: number = 6 + (attacker.baseAttack + attacker.baseDefense);
         const gold: number = 2 + state.rng.nextInt(0, 4);
         state.player.gold += gold;
-        state.log.push(`You gain ${xp} XP and loot ${gold} gold.`);
+        state.log.push(t('log.combat.loot', { xp, gold }));
         awardXp(xp);
 
         const currentDepth: number = state.dungeonStack[state.dungeonStack.length - 1]?.depth ?? 0;
@@ -2067,25 +2273,40 @@ function attack(attacker: Entity, defender: Entity): void {
   const defenderHpText: string = `(${Math.max(0, defender.hp)}/${defender.maxHp})`;
   const suffix: string = suffixParts.length > 0 ? ` (${suffixParts.join(', ')})` : '';
   if (attacker.kind === 'player') {
-    state.log.push(`You ${playerVerb} ${defender.name} for ${dmg}${suffix}. ${defenderHpText}`);
+    state.log.push(
+      t('log.combat.player', {
+        verb: playerVerb,
+        target: defender.name,
+        dmg,
+        suffix,
+        hp: defenderHpText
+      })
+    );
   } else if (defender.kind === 'player') {
-    state.log.push(`${attacker.name} hits you for ${dmg}. ${defenderHpText}`);
+    state.log.push(t('log.combat.monsterHitsYou', { name: attacker.name, dmg, hp: defenderHpText }));
   } else {
-    state.log.push(`${attacker.name} hits ${defender.name} for ${dmg}. ${defenderHpText}`);
+    state.log.push(
+      t('log.combat.monsterHitsMonster', {
+        attacker: attacker.name,
+        defender: defender.name,
+        dmg,
+        hp: defenderHpText
+      })
+    );
   }
 
   if (defender.hp <= 0) {
     if (defender.kind === 'player') {
-      state.log.push('You fall. Darkness closes in.');
+      state.log.push(t('log.combat.playerDeath'));
     } else {
-      state.log.push(`${defender.name} dies.`);
+      state.log.push(t('log.combat.dies', { name: defender.name }));
     }
 
     if (attacker.kind === 'player') {
       const xp: number = 6 + (defender.baseAttack + defender.baseDefense);
       const gold: number = 2 + state.rng.nextInt(0, 4);
       state.player.gold += gold;
-      state.log.push(`You gain ${xp} XP and loot ${gold} gold.`);
+      state.log.push(t('log.combat.loot', { xp, gold }));
       awardXp(xp);
 
       const currentDepth: number = state.dungeonStack[state.dungeonStack.length - 1]?.depth ?? 0;
@@ -2109,11 +2330,11 @@ function wraithDrain(attacker: Entity, defender: Entity): void {
   }
 
   const defenderHpText: string = `(${Math.max(0, defender.hp)}/${defender.maxHp})`;
-  const healText: string = heal > 0 ? ` Wraith heals ${heal}.` : '';
-  state.log.push(`Wraith drains you for ${dmg}. ${defenderHpText}${healText}`);
+  const healText: string = heal > 0 ? ` ${t('log.wraith.heal', { name: monsterName('wraith'), amount: heal })}` : '';
+  state.log.push(t('log.wraith.drain', { name: monsterName('wraith'), dmg, hp: defenderHpText, healText }));
 
   if (defender.hp <= 0) {
-    state.log.push('You fall. Darkness closes in.');
+    state.log.push(t('log.combat.playerDeath'));
   }
 }
 
@@ -2200,7 +2421,8 @@ function enterDungeonAt(worldPos: Point): void {
   state.player.mapRef = { kind: 'dungeon', dungeonId: dungeon.id };
   state.player.pos = { x: dungeon.stairsUp.x, y: dungeon.stairsUp.y };
 
-  state.log.push('You enter the dungeon.');
+  state.log.push(t('log.enter.dungeon'));
+  addStoryEvent(state, 'story.event.enterDungeon.title', 'story.event.enterDungeon.detail', { depth: 0 });
 }
 
 function enterTownAt(worldPos: Point): void {
@@ -2213,7 +2435,8 @@ function enterTownAt(worldPos: Point): void {
   state.autoPath = undefined;
   state.player.mapRef = { kind: 'town', townId: town.id };
   state.player.pos = { x: town.entrance.x, y: town.entrance.y };
-  state.log.push('You enter the town.');
+  state.log.push(t('log.enter.town'));
+  addStoryEvent(state, 'story.event.enterTown.title', 'story.event.enterTown.detail', { townId: town.id });
 }
 
 function exitTownToOverworld(): void {
@@ -2223,7 +2446,8 @@ function exitTownToOverworld(): void {
   state.player.pos = { x: returnPos.x, y: returnPos.y };
   state.currentTownId = undefined;
   state.townReturnPos = undefined;
-  state.log.push('You return to the overworld.');
+  state.log.push(t('log.enter.overworld'));
+  addStoryEvent(state, 'story.event.returnOverworld.title', 'story.event.returnOverworld.detail');
 }
 
 function goDownLevel(): void {
@@ -2238,7 +2462,8 @@ function goDownLevel(): void {
   state.dungeonStack.push({ baseId: current.baseId, depth: nextDepth, entranceWorldPos: current.entranceWorldPos });
   state.player.mapRef = { kind: 'dungeon', dungeonId: dungeon.id };
   state.player.pos = { x: dungeon.stairsUp.x, y: dungeon.stairsUp.y };
-  state.log.push(`You descend to depth ${nextDepth}. Theme: ${dungeon.theme}.`);
+  state.log.push(t('log.dungeon.descend', { depth: nextDepth, theme: t(`theme.${dungeon.theme}`) }));
+  addStoryEvent(state, 'story.event.descend.title', 'story.event.descend.detail', { depth: nextDepth, theme: t(`theme.${dungeon.theme}`) });
   recordDepthForQuests(state, nextDepth);
 }
 
@@ -2253,7 +2478,8 @@ function goUpLevelOrExit(): void {
     state.player.mapRef = { kind: 'overworld' };
     state.player.pos = { x: top.entranceWorldPos.x, y: top.entranceWorldPos.y };
     state.dungeonStack = [];
-    state.log.push('You return to the overworld.');
+    state.log.push(t('log.enter.overworld'));
+    addStoryEvent(state, 'story.event.returnOverworld.title', 'story.event.returnOverworld.detail');
     return;
   }
 
@@ -2267,7 +2493,8 @@ function goUpLevelOrExit(): void {
 
   state.player.mapRef = { kind: 'dungeon', dungeonId };
   state.player.pos = { x: dungeon.stairsDown.x, y: dungeon.stairsDown.y };
-  state.log.push(`You ascend to depth ${prev.depth}.`);
+  state.log.push(t('log.dungeon.ascend', { depth: prev.depth }));
+  addStoryEvent(state, 'story.event.ascend.title', 'story.event.ascend.detail', { depth: prev.depth });
 }
 
 function setDestination(dest: Point): void {
@@ -2284,7 +2511,7 @@ function setDestination(dest: Point): void {
   );
 
   if (!path || path.length < 2) {
-    state.log.push('No path found to destination.');
+    state.log.push(t('log.path.none'));
     state.destination = undefined;
     state.autoPath = undefined;
     return;
@@ -2292,7 +2519,7 @@ function setDestination(dest: Point): void {
 
   state.destination = dest;
   state.autoPath = path;
-  state.log.push(`Auto-walk set: ${dest.x}, ${dest.y}. Press any move/space to advance, or C to cancel.`);
+  state.log.push(t('log.autoWalk.set', { x: dest.x, y: dest.y }));
 }
 
 function syncRendererUi(): void {
@@ -2306,12 +2533,15 @@ function render(): void {
 
   modePill.textContent =
     state.mode === 'overworld'
-      ? 'Mode: overworld'
+      ? t('ui.mode.overworld')
       : state.mode === 'town'
-        ? 'Mode: town'
-        : `Mode: dungeon (depth ${state.dungeonStack[state.dungeonStack.length - 1]?.depth ?? 0} • ${dungeon?.theme ?? '?'})`;
+        ? t('ui.mode.town')
+        : t('ui.mode.dungeon', {
+            depth: state.dungeonStack[state.dungeonStack.length - 1]?.depth ?? 0,
+            theme: dungeon?.theme ? t(`theme.${dungeon.theme}`) : '?'
+          });
 
-  renderPill.textContent = `Renderer: PixiJS • FOV: ${state.useFov ? 'on' : 'off'}`;
+  renderPill.textContent = t('ui.render.pill', { fov: state.useFov ? t('ui.fov.on') : t('ui.fov.off') });
 
   if (state.mode === 'dungeon' && dungeon && state.useFov) {
     decayVisibilityToSeen(dungeon);
@@ -2325,13 +2555,25 @@ function render(): void {
   const agi: number = state.player.agility ?? 0;
   const intl: number = state.player.intellect ?? 0;
 
+  const statusText: string = (state.player.statusEffects ?? []).map((e) => `${t(`status.${e.kind}`)}:${e.remainingTurns}`).join(', ') || t('ui.none');
+
   statsEl.innerHTML = `
-    <div class="kv"><div><b>${escapeHtml(state.player.name)}</b> <span class="muted">Lvl ${state.player.level}</span></div><div>HP ${state.player.hp}/${state.player.maxHp}</div></div>
-    <div class="kv small"><div>Class ${escapeHtml(classInfo.name)}</div><div>Str ${str} • Agi ${agi} • Int ${intl}</div></div>
-    <div class="kv small"><div>Atk ${atk}</div><div>Def ${def}</div></div>
-    <div class="kv small"><div>XP ${state.player.xp}/${xpToNextLevel(state.player.level)}</div><div>Gold ${state.player.gold}</div></div>
-    <div class="kv small"><div>Pos ${state.player.pos.x}, ${state.player.pos.y}</div><div class="muted">Turn ${state.turnCounter}</div></div>
-    <div class="kv small"><div class="muted">Status ${(state.player.statusEffects ?? []).map((e) => e.kind + ':' + e.remainingTurns).join(', ') || 'none'}</div><div class="muted">Seed ${state.worldSeed}</div></div>
+    <div class="kv"><div><b>${escapeHtml(state.player.name)}</b> <span class="muted">${escapeHtml(
+      t('ui.stats.level', { level: state.player.level })
+    )}</span></div><div>${escapeHtml(t('ui.stats.hp', { hp: state.player.hp, maxHp: state.player.maxHp }))}</div></div>
+    <div class="kv small"><div>${escapeHtml(t('ui.stats.class', { className: classInfo.name }))}</div><div>${escapeHtml(
+      t('ui.stats.statsLine', { str, agi, int: intl })
+    )}</div></div>
+    <div class="kv small"><div>${escapeHtml(t('ui.stats.atk', { atk }))}</div><div>${escapeHtml(t('ui.stats.def', { def }))}</div></div>
+    <div class="kv small"><div>${escapeHtml(t('ui.stats.xp', { xp: state.player.xp, next: xpToNextLevel(state.player.level) }))}</div><div>${escapeHtml(
+      t('ui.stats.gold', { gold: state.player.gold })
+    )}</div></div>
+    <div class="kv small"><div>${escapeHtml(t('ui.stats.pos', { x: state.player.pos.x, y: state.player.pos.y }))}</div><div class="muted">${escapeHtml(
+      t('ui.stats.turn', { turn: state.turnCounter })
+    )}</div></div>
+    <div class="kv small"><div class="muted">${escapeHtml(t('ui.stats.status', { status: statusText }))}</div><div class="muted">${escapeHtml(
+      t('ui.stats.seed', { seed: state.worldSeed })
+    )}</div></div>
   `;
 
   const townPos: Point | undefined = getActiveTownWorldPos();
@@ -2351,6 +2593,7 @@ function render(): void {
     activeShop,
     canShop: isStandingOnTown(),
     quests: state.quests,
+    story: state.story,
     activeTownId,
     shopCategory: state.shopCategory,
     shopEconomy: shopPricing?.economy,
@@ -2399,7 +2642,8 @@ function render(): void {
       useFov: state.useFov
     },
     PIXI_VIEW_W,
-    PIXI_VIEW_H
+    PIXI_VIEW_H,
+    state.rendererMode === 'isometric' ? 'isometric' : 'canvas'
   );
 }
 
@@ -2505,7 +2749,7 @@ function usePotion(itemId: string): void {
   state.player.inventory = state.player.inventory.filter((x) => x !== itemId);
   state.items = state.items.filter((x) => x.id !== itemId);
 
-  state.log.push(`You drink ${it.name}. (+${state.player.hp - before} HP)`);
+  state.log.push(t('item.drink', { name: it.name, amount: state.player.hp - before }));
 }
 
 function equipWeapon(itemId: string): void {
@@ -2517,7 +2761,7 @@ function equipWeapon(itemId: string): void {
     return;
   }
   state.player.equipment.weaponItemId = itemId;
-  state.log.push(`Equipped weapon: ${it.name}.`);
+  state.log.push(t('item.equip.weapon', { name: it.name }));
 }
 
 function equipArmor(itemId: string): void {
@@ -2529,7 +2773,7 @@ function equipArmor(itemId: string): void {
     return;
   }
   state.player.equipment.armorItemId = itemId;
-  state.log.push(`Equipped armor: ${it.name}.`);
+  state.log.push(t('item.equip.armor', { name: it.name }));
 }
 
 function dropItem(itemId: string): void {
@@ -2547,10 +2791,10 @@ function dropItem(itemId: string): void {
     if (dungeon) {
       it.mapRef = { kind: 'dungeon', dungeonId: dungeon.id };
       it.pos = { x: state.player.pos.x, y: state.player.pos.y };
-      state.log.push(`Dropped: ${it.name}.`);
+      state.log.push(t('item.drop', { name: it.name }));
     }
   } else {
-    state.log.push(`Discarded: ${it.name}.`);
+    state.log.push(t('item.discard', { name: it.name }));
     state.items = state.items.filter((x) => x.id !== itemId);
   }
 
@@ -2565,7 +2809,7 @@ function dropItem(itemId: string): void {
 
 function buyItem(itemId: string): void {
   if (!canOpenShopHere()) {
-    state.log.push('You need to be at the shop to buy.');
+    state.log.push(t('log.shop.needBuy'));
     return;
   }
   const it: Item | undefined = state.items.find((x) => x.id === itemId);
@@ -2581,18 +2825,18 @@ function buyItem(itemId: string): void {
   const economy: import('./core/types').ShopEconomy = getShopEconomy(state, activeShop);
   const price: number = getShopBuyPrice(activeShop, it, economy);
   if (state.player.gold < price) {
-    state.log.push('Not enough gold.');
+    state.log.push(t('log.shop.notEnoughGold'));
     return;
   }
 
   state.player.gold -= price;
   state.player.inventory.push(it.id);
-  state.log.push(`Bought: ${it.name} for ${price}g.`);
+  state.log.push(t('item.bought', { name: it.name, price }));
 }
 
 function sellItem(itemId: string): void {
   if (!canOpenShopHere()) {
-    state.log.push('You need to be at the shop to sell.');
+    state.log.push(t('log.shop.needSell'));
     return;
   }
   const it: Item | undefined = state.items.find((x) => x.id === itemId);
@@ -2623,13 +2867,13 @@ function sellItem(itemId: string): void {
   // Keep item definition in items list so it can be re-sold later? We'll remove it to simplify.
   state.items = state.items.filter((x) => x.id !== itemId);
 
-  state.log.push(`Sold: ${it.name} for ${price}g.`);
+  state.log.push(t('item.sold', { name: it.name, price }));
 }
 
 function turnInQuest(questId: string): void {
   const townId: string | undefined = getActiveTownId();
   if (!townId) {
-    state.log.push('You need to be in town to turn in quests.');
+    state.log.push(t('log.quest.needTown'));
     return;
   }
 
@@ -2638,18 +2882,18 @@ function turnInQuest(questId: string): void {
     return;
   }
   if (q.townId !== townId) {
-    state.log.push('That quest belongs to another town.');
+    state.log.push(t('log.quest.otherTown'));
     return;
   }
   if (q.turnedIn) {
     return;
   }
   if (!q.completed) {
-    state.log.push('Quest is not complete yet.');
+    state.log.push(t('log.quest.notComplete'));
     return;
   }
   if (q.rewardItemIds && !q.rewardItemId) {
-    state.log.push('Choose a reward before turning this quest in.');
+    state.log.push(t('log.quest.chooseReward'));
     return;
   }
 
@@ -2662,12 +2906,13 @@ function turnInQuest(questId: string): void {
       if (!state.player.inventory.includes(rewardItem.id)) {
         state.player.inventory.push(rewardItem.id);
       }
-      state.log.push(`Quest reward: ${rewardItem.name}.`);
+      state.log.push(t('log.quest.reward', { name: rewardItem.name }));
     } else {
-      state.log.push('Quest reward missing from inventory cache.');
+      state.log.push(t('log.quest.rewardMissing'));
     }
   }
-  state.log.push(`Quest turned in! +${q.rewardGold}g and +${q.rewardXp} XP.`);
+  state.log.push(t('log.quest.turnedIn', { gold: q.rewardGold, xp: q.rewardXp }));
+  addStoryEvent(state, 'story.event.quest.title', 'story.event.quest.detail', { desc: q.description });
 }
 
 function chooseQuestReward(questId: string, rewardId: string): void {
@@ -2684,14 +2929,14 @@ function chooseQuestReward(questId: string, rewardId: string): void {
   q.rewardItemId = rewardId;
   const rewardItem: Item | undefined = state.items.find((it) => it.id === rewardId);
   if (rewardItem) {
-    state.log.push(`Reward chosen: ${rewardItem.name}.`);
+    state.log.push(t('log.quest.rewardChosen', { name: rewardItem.name }));
   } else {
-    state.log.push('Reward chosen.');
+    state.log.push(t('log.quest.rewardChosenGeneric'));
   }
 }
 
 function escapeHtml(s: string): string {
-  return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function keyToAction(e: KeyboardEvent): Action | undefined {
@@ -2720,6 +2965,9 @@ function keyToAction(e: KeyboardEvent): Action | undefined {
   }
   if (e.key === 'q' || e.key === 'Q') {
     return { kind: 'toggleQuest' };
+  }
+  if (e.key === 'h' || e.key === 'H') {
+    return { kind: 'toggleStory' };
   }
   if (e.key === 'm' || e.key === 'M') {
     return { kind: 'toggleMap' };
@@ -2781,7 +3029,7 @@ function handleMapKey(e: KeyboardEvent): void {
   if (e.key === 'c' || e.key === 'C') {
     state.destination = undefined;
     state.autoPath = undefined;
-    state.log.push('Auto-walk canceled.');
+    state.log.push(t('log.autoWalk.cancel'));
   }
 
   if (e.key === 'Enter') {
@@ -2818,7 +3066,7 @@ window.addEventListener('keydown', (e: KeyboardEvent) => {
 });
 
 btnAscii.addEventListener('click', () => {
-  state.log.push('ASCII renderer temporarily disabled.');
+  state.log.push(t('log.renderer.asciiDisabled'));
   render();
 });
 
@@ -2830,7 +3078,7 @@ btnCanvas.addEventListener('click', () => {
 
 btnNewSeed.addEventListener('click', () => {
   pendingSeed = Date.now() & 0xffffffff;
-  state.log.push(`Preparing new world seed ${pendingSeed}. Choose your class to begin.`);
+  state.log.push(t('log.newSeed', { seed: pendingSeed }));
   showClassModal();
 });
 
@@ -2853,6 +3101,11 @@ btnShop.addEventListener('click', () => {
   if (state.activePanel === 'shop' && isStandingOnTown()) {
     ensureShopForTown(state, state.player.pos);
   }
+  render();
+});
+
+btnStory.addEventListener('click', () => {
+  state.activePanel = state.activePanel === 'story' ? 'none' : 'story';
   render();
 });
 
@@ -2917,6 +3170,8 @@ function buildSaveData(): SaveDataV3 {
     mode: state.mode,
     playerId: state.player.id,
     playerClass: state.playerClass,
+    playerGender: state.player.gender,
+    story: state.story,
     entities: state.entities,
     items: state.items,
     dungeons,
@@ -2933,7 +3188,7 @@ function buildSaveData(): SaveDataV3 {
 function doSave(): void {
   const data: SaveDataV3 = buildSaveData();
   saveToLocalStorage(data);
-  state.log.push('Saved.');
+  state.log.push(t('log.saved'));
 }
 
 function applyLoadedSave(data: SaveDataV3): boolean {
@@ -2962,12 +3217,16 @@ function applyLoadedSave(data: SaveDataV3): boolean {
     player.statusEffects = [];
   }
   if (!player) {
-    state.log.push('Save missing player.');
+    state.log.push(t('log.load.missingPlayer'));
     return false;
   }
 
   const loadedClass: CharacterClass = data.playerClass ?? player.classType ?? 'warrior';
+  const loadedGender: Gender = data.playerGender ?? player.gender ?? 'female';
   ensureClassAttributes(player, loadedClass);
+  player.gender = loadedGender;
+
+  const loadedStory: CharacterStory = data.story ?? buildStory(rng, loadedClass, loadedGender);
 
   state = {
     worldSeed: data.worldSeed,
@@ -2981,6 +3240,7 @@ function applyLoadedSave(data: SaveDataV3): boolean {
     townReturnPos: resolvedMode === 'town' ? data.townReturnPos : undefined,
     player,
     playerClass: loadedClass,
+    story: loadedStory,
     entities: data.entities,
     items: data.items,
     shops: shopsMap,
@@ -3008,16 +3268,23 @@ function applyLoadedSave(data: SaveDataV3): boolean {
   pendingClass = loadedClass;
   pendingSeed = data.worldSeed;
   hideClassModal();
-  state.log.push('Loaded.');
+  state.log.push(t('log.loaded'));
   const loadedCfg: ClassConfig = CLASS_CONFIG[loadedClass];
-  state.log.push(`Class: ${loadedCfg.name} • Str ${state.player.strength} • Agi ${state.player.agility} • Int ${state.player.intellect}.`);
+  state.log.push(
+    t('log.classStats', {
+      name: loadedCfg.name,
+      str: state.player.strength ?? 0,
+      agi: state.player.agility ?? 0,
+      int: state.player.intellect ?? 0
+    })
+  );
   return true;
 }
 
 function doLoad(): void {
   const data: SaveDataV3 | undefined = loadFromLocalStorage();
   if (!data) {
-    state.log.push('No save found.');
+    state.log.push(t('log.load.none'));
     return;
   }
   applyLoadedSave(data);
@@ -3026,7 +3293,7 @@ function doLoad(): void {
 function exportSaveJson(): void {
   const code: string = serializeSaveDataBase62(buildSaveData());
   openSaveModal('export', code);
-  state.log.push('Save code ready to share.');
+  state.log.push(t('log.save.shareReady'));
 }
 
 function importSaveJson(): void {
@@ -3035,12 +3302,11 @@ function importSaveJson(): void {
 
 function openSaveModal(mode: SaveModalMode, json: string = ''): void {
   saveModalMode = mode;
-  saveModalTitle.textContent = mode === 'export' ? 'Export Save Code (Base62)' : 'Import Save Code (Base62)';
-  saveModalHint.textContent =
-    mode === 'export' ? 'Copy this Base62 save code and share it with friends.' : 'Paste a shared Base62 save code below to load it.';
+  saveModalTitle.textContent = mode === 'export' ? t('ui.saveModal.title.export') : t('ui.saveModal.title.import');
+  saveModalHint.textContent = mode === 'export' ? t('ui.saveModal.hint.export') : t('ui.saveModal.hint.import');
   saveJsonText.value = json;
   saveJsonText.readOnly = mode === 'export';
-  saveJsonText.placeholder = mode === 'export' ? '' : 'Paste save code here';
+  saveJsonText.placeholder = mode === 'export' ? '' : t('ui.saveModal.placeholder');
   btnSaveModalCopy.style.display = mode === 'export' ? 'inline-block' : 'none';
   btnSaveModalLoad.style.display = mode === 'import' ? 'inline-block' : 'none';
   saveModal.classList.remove('hidden');
@@ -3064,7 +3330,7 @@ function copySaveJson(): void {
     navigator.clipboard
       .writeText(text)
       .then(() => {
-        state.log.push('Save code copied to clipboard.');
+        state.log.push(t('log.save.copied'));
       })
       .catch(() => {
         fallbackCopySaveJson(text);
@@ -3080,21 +3346,21 @@ function fallbackCopySaveJson(text: string): void {
   saveJsonText.select();
   const ok: boolean = document.execCommand('copy');
   if (ok) {
-    state.log.push('Save code copied to clipboard.');
+    state.log.push(t('log.save.copied'));
   } else {
-    state.log.push('Copy failed. Select and copy manually.');
+    state.log.push(t('log.save.copyFailed'));
   }
 }
 
 function loadSaveFromModal(): void {
   const code: string = saveJsonText.value.trim();
   if (!code) {
-    state.log.push('Paste a save code first.');
+    state.log.push(t('log.save.pasteFirst'));
     return;
   }
   const data: SaveDataV3 | undefined = loadFromBase62String(code);
   if (!data) {
-    state.log.push('Invalid save code.');
+    state.log.push(t('log.save.invalid'));
     return;
   }
   if (applyLoadedSave(data)) {
@@ -3103,10 +3369,11 @@ function loadSaveFromModal(): void {
 }
 
 function rebuildDungeonStackFromPlayer(data: SaveDataV3, player: Entity): DungeonStackFrame[] {
-  if (player.mapRef.kind !== 'dungeon') {
+  const mapRef = player.mapRef;
+  if (mapRef.kind !== 'dungeon') {
     return [];
   }
-  const dungeon: Dungeon | undefined = data.dungeons.find((d) => d.id === player.mapRef.dungeonId);
+  const dungeon: Dungeon | undefined = data.dungeons.find((d) => d.id === mapRef.dungeonId);
   if (!dungeon) {
     return [];
   }

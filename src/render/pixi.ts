@@ -18,6 +18,8 @@ type PixiRenderContext = {
   useFov: boolean;
 };
 
+type PixiRenderMode = 'canvas' | 'isometric';
+
 export class PixiRenderer {
   private readonly app: Application;
   private readonly atlas: SpriteAtlas;
@@ -50,7 +52,7 @@ export class PixiRenderer {
   private viewWidth: number;
   private viewHeight: number;
   private initialized: boolean;
-  private pendingRender?: { ctx: PixiRenderContext; viewWidth: number; viewHeight: number };
+  private pendingRender?: { ctx: PixiRenderContext; viewWidth: number; viewHeight: number; renderMode: PixiRenderMode };
 
   public constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -97,7 +99,7 @@ export class PixiRenderer {
         if (this.pendingRender) {
           const pending = this.pendingRender;
           this.pendingRender = undefined;
-          this.render(pending.ctx, pending.viewWidth, pending.viewHeight);
+          this.render(pending.ctx, pending.viewWidth, pending.viewHeight, pending.renderMode);
         }
       })
       .catch((err) => {
@@ -105,9 +107,9 @@ export class PixiRenderer {
       });
   }
 
-  public render(ctx: PixiRenderContext, viewWidth: number, viewHeight: number): void {
+  public render(ctx: PixiRenderContext, viewWidth: number, viewHeight: number, renderMode: PixiRenderMode = 'canvas'): void {
     if (!this.initialized) {
-      this.pendingRender = { ctx, viewWidth, viewHeight };
+      this.pendingRender = { ctx, viewWidth, viewHeight, renderMode };
       return;
     }
 
@@ -117,6 +119,11 @@ export class PixiRenderer {
 
     if (viewWidth !== this.viewWidth || viewHeight !== this.viewHeight) {
       this.rebuildView(viewWidth, viewHeight);
+    }
+
+    if (renderMode === 'isometric') {
+      this.renderIsometric(ctx, viewWidth, viewHeight);
+      return;
     }
 
     const dungeon: Dungeon | undefined = ctx.dungeon;
@@ -240,6 +247,494 @@ export class PixiRenderer {
     }
 
     this.app.render();
+  }
+
+  private renderIsometric(ctx: PixiRenderContext, viewWidth: number, viewHeight: number): void {
+    const originX: number = ctx.player.pos.x;
+    const originY: number = ctx.player.pos.y;
+    const halfW: number = Math.floor(viewWidth / 2);
+    const halfH: number = Math.floor(viewHeight / 2);
+    const lightRadius: number = Math.max(halfW, halfH) + 1;
+    const now: number = performance.now();
+
+    const isoTileW: number = this.tileSize * 2;
+    const isoTileH: number = this.tileSize;
+    const centerX: number = Math.floor(this.app.renderer.width / 2) - Math.floor(isoTileW / 2);
+    const centerY: number = Math.floor(this.app.renderer.height / 2) - Math.floor(isoTileH / 2);
+
+    this.tileLayer.removeChildren();
+    this.entityLayer.removeChildren();
+    this.overlayLayer.removeChildren();
+
+    const tiles: { wx: number; wy: number; kind: 'overworld' | 'dungeon' | 'town'; tile: string; theme?: DungeonTheme; alpha: number }[] = [];
+
+    for (let row: number = 0; row < viewHeight; row++) {
+      for (let col: number = 0; col < viewWidth; col++) {
+        const x: number = col - halfW;
+        const y: number = row - halfH;
+        const wx: number = originX + x;
+        const wy: number = originY + y;
+
+        if (ctx.mode === 'overworld') {
+          const tile: string = ctx.overworld.getTile(wx, wy);
+          tiles.push({ wx, wy, kind: 'overworld', tile, alpha: 1 });
+          continue;
+        }
+
+        if (ctx.mode === 'dungeon') {
+          const dungeon: Dungeon | undefined = ctx.dungeon;
+          if (!dungeon) {
+            continue;
+          }
+          if (wx < 0 || wy < 0 || wx >= dungeon.width || wy >= dungeon.height) {
+            continue;
+          }
+          if (ctx.useFov) {
+            const vis = getVisibility(dungeon, wx, wy);
+            if (vis === 'unseen') {
+              continue;
+            }
+          }
+          const dist: number = Math.max(Math.abs(x), Math.abs(y));
+          const lightFactor: number = this.lightFalloff(dist, lightRadius);
+          let tileAlpha: number = 1;
+          if (ctx.useFov) {
+            const vis = getVisibility(dungeon, wx, wy);
+            if (vis === 'seen') {
+              tileAlpha = 0.35;
+            }
+          }
+          const tile = getDungeonTile(dungeon, wx, wy);
+          tiles.push({ wx, wy, kind: 'dungeon', tile, theme: dungeon.theme, alpha: tileAlpha * lightFactor });
+          continue;
+        }
+
+        const town: Town | undefined = ctx.town;
+        if (!town) {
+          continue;
+        }
+        if (wx < 0 || wy < 0 || wx >= town.width || wy >= town.height) {
+          continue;
+        }
+        const tile = getTownTile(town, wx, wy);
+        tiles.push({ wx, wy, kind: 'town', tile, alpha: 1 });
+      }
+    }
+
+    tiles.sort((a, b) => a.wx + a.wy - (b.wx + b.wy) || a.wx - b.wx);
+
+    for (const t of tiles) {
+      const tileHeight: number = this.isoTileHeight(t.kind, t.tile, isoTileH);
+      const screen = this.isoToScreen(t.wx, t.wy, originX, originY, centerX, centerY, isoTileW, isoTileH);
+      const sprite = new Sprite(this.getIsoTileTexture(t.kind, t.tile, t.theme, isoTileW, isoTileH, tileHeight));
+      sprite.x = screen.x;
+      sprite.y = screen.y - tileHeight;
+      sprite.width = isoTileW;
+      sprite.height = isoTileH + tileHeight;
+      sprite.alpha = t.alpha;
+      this.tileLayer.addChild(sprite);
+    }
+
+    // Highlight the player's tile for readability (under entities).
+    const playerBaseHeight: number = this.isoTileHeightAt(ctx, originX, originY, isoTileH);
+    const playerTile = this.isoToScreen(originX, originY, originX, originY, centerX, centerY, isoTileW, isoTileH);
+    const highlight = new Sprite(this.getIsoHighlightTexture(isoTileW, isoTileH));
+    highlight.x = playerTile.x;
+    highlight.y = playerTile.y - playerBaseHeight;
+    highlight.width = isoTileW;
+    highlight.height = isoTileH;
+    highlight.alpha = 0.5;
+    this.tileLayer.addChild(highlight);
+
+    const draws: { wx: number; wy: number; key: SpriteKey; alpha: number; yOffset: number; bob: number }[] = [];
+    const isoEntityXOffset: number = (isoTileW - this.tileSize) / 2;
+
+    for (const it of ctx.items) {
+      if (!it.mapRef || !it.pos) {
+        continue;
+      }
+      if (ctx.mode === 'overworld') {
+        if (it.mapRef.kind !== 'overworld') {
+          continue;
+        }
+      } else if (ctx.mode === 'dungeon') {
+        const dungeon: Dungeon | undefined = ctx.dungeon;
+        if (!dungeon) {
+          continue;
+        }
+        if (it.mapRef.kind !== 'dungeon' || it.mapRef.dungeonId !== dungeon.id) {
+          continue;
+        }
+        if (ctx.useFov) {
+          const vis = getVisibility(dungeon, it.pos.x, it.pos.y);
+          if (vis !== 'visible') {
+            continue;
+          }
+        }
+      } else {
+        const town: Town | undefined = ctx.town;
+        if (!town) {
+          continue;
+        }
+        if (it.mapRef.kind !== 'town' || it.mapRef.townId !== town.id) {
+          continue;
+        }
+      }
+
+      const spriteKey: SpriteKey = it.kind === 'potion' ? 'it_potion' : it.kind === 'weapon' ? 'it_weapon' : 'it_armor';
+      const dist: number = Math.max(Math.abs(it.pos.x - originX), Math.abs(it.pos.y - originY));
+      const alpha: number = ctx.mode === 'dungeon' ? this.lightFalloff(dist, lightRadius) : 1;
+      const baseHeight: number = this.isoTileHeightAt(ctx, it.pos.x, it.pos.y, isoTileH);
+      draws.push({
+        wx: it.pos.x,
+        wy: it.pos.y,
+        key: spriteKey,
+        alpha,
+        yOffset: this.tileSize / 2 - isoTileH / 2 + baseHeight,
+        bob: Math.sin(now / 320 + this.phaseFromId(it.id)) * 0.6
+      });
+    }
+
+    for (const entity of ctx.entities) {
+      if (entity.kind !== 'monster' || entity.hp <= 0) {
+        continue;
+      }
+
+      if (ctx.mode === 'overworld') {
+        if (entity.mapRef.kind !== 'overworld') {
+          continue;
+        }
+      } else if (ctx.mode === 'dungeon') {
+        const dungeon: Dungeon | undefined = ctx.dungeon;
+        if (!dungeon) {
+          continue;
+        }
+        if (entity.mapRef.kind !== 'dungeon' || entity.mapRef.dungeonId !== dungeon.id) {
+          continue;
+        }
+        if (ctx.useFov) {
+          const vis = getVisibility(dungeon, entity.pos.x, entity.pos.y);
+          if (vis !== 'visible') {
+            continue;
+          }
+        }
+      } else {
+        const town: Town | undefined = ctx.town;
+        if (!town) {
+          continue;
+        }
+        if (entity.mapRef.kind !== 'town' || entity.mapRef.townId !== town.id) {
+          continue;
+        }
+      }
+
+      const dist: number = Math.max(Math.abs(entity.pos.x - originX), Math.abs(entity.pos.y - originY));
+      const alpha: number = ctx.mode === 'dungeon' ? this.lightFalloff(dist, lightRadius) : 1;
+      const baseHeight: number = this.isoTileHeightAt(ctx, entity.pos.x, entity.pos.y, isoTileH);
+      draws.push({
+        wx: entity.pos.x,
+        wy: entity.pos.y,
+        key: this.monsterKey(entity.glyph),
+        alpha,
+        yOffset: this.tileSize / 2 - isoTileH / 2 + baseHeight,
+        bob: Math.sin(now / 520 + this.phaseFromId(entity.id)) * 0.4
+      });
+    }
+
+    draws.push({
+      wx: originX,
+      wy: originY,
+      key: 'ent_player',
+      alpha: ctx.mode === 'dungeon' ? this.lightFalloff(0, lightRadius) : 1,
+      yOffset: this.tileSize / 2 - isoTileH / 2 + playerBaseHeight,
+      bob: Math.sin(now / 700) * 0.4
+    });
+
+    draws.sort((a, b) => a.wx + a.wy - (b.wx + b.wy) || a.wx - b.wx);
+
+    for (const d of draws) {
+      const screen = this.isoToScreen(d.wx, d.wy, originX, originY, centerX, centerY, isoTileW, isoTileH);
+      const sprite = new Sprite(this.getTexture(d.key));
+      sprite.x = screen.x + isoEntityXOffset;
+      sprite.y = screen.y - d.yOffset + d.bob;
+      sprite.width = this.tileSize;
+      sprite.height = this.tileSize;
+      sprite.alpha = d.alpha;
+      this.entityLayer.addChild(sprite);
+    }
+
+    // Highlight rendered under entities.
+
+    if (this.fogSprite) {
+      this.fogSprite.visible = ctx.mode === 'dungeon';
+    }
+    if (this.cloudFarSprite) {
+      this.cloudFarSprite.visible = ctx.mode === 'overworld';
+    }
+    if (this.cloudSprite) {
+      this.cloudSprite.visible = ctx.mode === 'overworld';
+    }
+    this.updateFogDrift();
+    this.updateCloudFarDrift();
+    this.updateCloudDrift();
+
+    if (this.vignetteSprite) {
+      this.vignetteSprite.alpha = ctx.mode === 'dungeon' ? 0.75 : 0.45;
+    }
+
+    this.app.render();
+  }
+
+  private getIsoHighlightTexture(isoTileW: number, isoTileH: number): Texture {
+    const cacheKey: string = `iso_highlight_${isoTileW}x${isoTileH}`;
+    const cached: Texture | undefined = this.textures.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const canvas: HTMLCanvasElement = document.createElement('canvas');
+    canvas.width = isoTileW;
+    canvas.height = isoTileH;
+    const ctx: CanvasRenderingContext2D | null = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Canvas not available for iso highlight.');
+    }
+
+    const w: number = canvas.width;
+    const h: number = canvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.beginPath();
+    ctx.moveTo(w / 2, 0);
+    ctx.lineTo(w, h / 2);
+    ctx.lineTo(w / 2, h);
+    ctx.lineTo(0, h / 2);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255, 235, 190, 0.3)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 240, 210, 0.7)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    const texture: Texture = Texture.from(canvas);
+    this.textures.set(cacheKey, texture);
+    return texture;
+  }
+
+  private isoTileHeightAt(ctx: PixiRenderContext, wx: number, wy: number, isoTileH: number): number {
+    if (ctx.mode === 'overworld') {
+      const tile: string = ctx.overworld.getTile(wx, wy);
+      return this.isoTileHeight('overworld', tile, isoTileH);
+    }
+    if (ctx.mode === 'dungeon') {
+      const dungeon: Dungeon | undefined = ctx.dungeon;
+      if (!dungeon) {
+        return 0;
+      }
+      if (wx < 0 || wy < 0 || wx >= dungeon.width || wy >= dungeon.height) {
+        return 0;
+      }
+      const tile = getDungeonTile(dungeon, wx, wy);
+      return this.isoTileHeight('dungeon', tile, isoTileH);
+    }
+    const town: Town | undefined = ctx.town;
+    if (!town) {
+      return 0;
+    }
+    if (wx < 0 || wy < 0 || wx >= town.width || wy >= town.height) {
+      return 0;
+    }
+    const tile = getTownTile(town, wx, wy);
+    return this.isoTileHeight('town', tile, isoTileH);
+  }
+
+  private getIsoTileTexture(
+    kind: 'overworld' | 'dungeon' | 'town',
+    tile: string,
+    theme: DungeonTheme | undefined,
+    isoTileW: number,
+    isoTileH: number,
+    tileHeight: number
+  ): Texture {
+    const colors = this.isoTileColors(kind, tile, theme);
+    const cacheKey: string = `iso_${kind}_${tile}_${theme ?? 'none'}_${colors.base}_${colors.edge}_${isoTileW}x${isoTileH}_${tileHeight}`;
+    const cached: Texture | undefined = this.textures.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const canvas: HTMLCanvasElement = document.createElement('canvas');
+    canvas.width = isoTileW;
+    canvas.height = isoTileH + tileHeight;
+    const ctx: CanvasRenderingContext2D | null = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Canvas not available for iso tile.');
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const w: number = canvas.width;
+    const h: number = canvas.height;
+
+    ctx.beginPath();
+    ctx.moveTo(w / 2, 0);
+    ctx.lineTo(w, isoTileH / 2);
+    ctx.lineTo(w / 2, isoTileH);
+    ctx.lineTo(0, isoTileH / 2);
+    ctx.closePath();
+    ctx.fillStyle = colors.base;
+    ctx.fill();
+
+    ctx.strokeStyle = colors.edge;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    if (tileHeight > 0) {
+      const sideLeft: string = colors.edge;
+      const sideRight: string = this.darkenHex(colors.base, 0.2);
+
+      ctx.fillStyle = sideLeft;
+      ctx.beginPath();
+      ctx.moveTo(0, isoTileH / 2);
+      ctx.lineTo(w / 2, isoTileH);
+      ctx.lineTo(w / 2, isoTileH + tileHeight);
+      ctx.lineTo(0, isoTileH / 2 + tileHeight);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = sideRight;
+      ctx.beginPath();
+      ctx.moveTo(w, isoTileH / 2);
+      ctx.lineTo(w / 2, isoTileH);
+      ctx.lineTo(w / 2, isoTileH + tileHeight);
+      ctx.lineTo(w, isoTileH / 2 + tileHeight);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    const texture: Texture = Texture.from(canvas);
+    this.textures.set(cacheKey, texture);
+    return texture;
+  }
+
+  private isoTileColors(kind: 'overworld' | 'dungeon' | 'town', tile: string, theme: DungeonTheme | undefined): { base: string; edge: string } {
+    if (kind === 'overworld') {
+      switch (tile) {
+        case 'water':
+          return { base: '#0c2f4a', edge: '#0f496d' };
+        case 'forest':
+          return { base: '#0e2a1b', edge: '#184a2f' };
+        case 'mountain':
+          return { base: '#3a3f46', edge: '#555b63' };
+        case 'road':
+          return { base: '#2b251c', edge: '#3a2e21' };
+        case 'town_ground':
+          return { base: '#2f2720', edge: '#3f352b' };
+        case 'town_road':
+          return { base: '#3a2f25', edge: '#4a3b2e' };
+        case 'town_square':
+          return { base: '#3d332a', edge: '#4f4134' };
+        case 'town_wall':
+        case 'town_gate':
+          return { base: '#232a34', edge: '#343f4d' };
+        case 'town_shop':
+        case 'town_tavern':
+        case 'town_smith':
+        case 'town_house':
+          return { base: '#3b2f23', edge: '#4a3a2b' };
+        case 'town':
+        case 'grass':
+        default:
+          return { base: '#1f3a24', edge: '#2f5433' };
+      }
+    }
+
+    if (kind === 'town') {
+      switch (tile) {
+        case 'road':
+          return { base: '#2b241d', edge: '#3a2f25' };
+        case 'square':
+          return { base: '#2f2924', edge: '#3d352f' };
+        case 'gate':
+        case 'wall':
+          return { base: '#2a2430', edge: '#3a3242' };
+        case 'shop':
+        case 'tavern':
+        case 'smith':
+        case 'house':
+          return { base: '#2f2720', edge: '#3f352b' };
+        case 'floor':
+        default:
+          return { base: '#1d1a16', edge: '#2b241d' };
+      }
+    }
+
+    const palette = themePalette(theme ?? 'ruins');
+    switch (tile) {
+      case 'wall':
+        return { base: palette.wall, edge: palette.stairs };
+      case 'stairsUp':
+      case 'stairsDown':
+        return { base: palette.stairs, edge: palette.glyph };
+      case 'bossFloor':
+        return { base: palette.floor, edge: '#7f6b4a' };
+      case 'floor':
+      default:
+        return { base: palette.floor, edge: '#2a3340' };
+    }
+  }
+
+  private isoTileHeight(kind: 'overworld' | 'dungeon' | 'town', tile: string, isoTileH: number): number {
+    const low: number = Math.max(2, Math.floor(isoTileH * 0.2));
+    const high: number = Math.max(5, Math.floor(isoTileH * 0.8));
+
+    if (kind === 'dungeon') {
+      return tile === 'wall' ? high : low;
+    }
+    if (kind === 'town') {
+      return tile === 'wall' ? high : low;
+    }
+    if (kind === 'overworld') {
+      if (tile === 'mountain' || tile === 'town_wall') {
+        return high;
+      }
+      if (tile === 'water') {
+        return 0;
+      }
+      return low;
+    }
+    return low;
+  }
+
+  private darkenHex(color: string, amount: number): string {
+    const raw: string = color.startsWith('#') ? color.slice(1) : color;
+    if (raw.length !== 6) {
+      return color;
+    }
+    const r: number = parseInt(raw.slice(0, 2), 16);
+    const g: number = parseInt(raw.slice(2, 4), 16);
+    const b: number = parseInt(raw.slice(4, 6), 16);
+    const scale: number = Math.max(0, Math.min(1, 1 - amount));
+    const nr: number = Math.max(0, Math.min(255, Math.round(r * scale)));
+    const ng: number = Math.max(0, Math.min(255, Math.round(g * scale)));
+    const nb: number = Math.max(0, Math.min(255, Math.round(b * scale)));
+    return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
+  }
+
+  private isoToScreen(
+    wx: number,
+    wy: number,
+    originX: number,
+    originY: number,
+    centerX: number,
+    centerY: number,
+    tileW: number,
+    tileH: number
+  ): { x: number; y: number } {
+    const dx: number = wx - originX;
+    const dy: number = wy - originY;
+    const x: number = (dx - dy) * (tileW / 2) + centerX;
+    const y: number = (dx + dy) * (tileH / 2) + centerY;
+    return { x, y };
   }
 
   private rebuildView(viewWidth: number, viewHeight: number): void {

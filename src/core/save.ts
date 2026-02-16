@@ -10,6 +10,8 @@ export type SaveDataV3 = {
 
   playerId: string;
   playerClass?: import('./types').CharacterClass;
+  playerGender?: import('./types').Gender;
+  story?: import('./types').CharacterStory;
 
   entities: Entity[];
   items: Item[];
@@ -26,7 +28,7 @@ export type SaveDataV3 = {
   quests: import('./types').Quest[];
 
   // UI state (optional)
-  activePanel: 'none' | 'inventory' | 'shop' | 'quest';
+  activePanel: 'none' | 'inventory' | 'shop' | 'quest' | 'story';
 };
 
 export function saveToLocalStorage(data: SaveDataV3): void {

@@ -6,6 +6,8 @@ export type MapRef = { kind: 'overworld' } | { kind: 'dungeon'; dungeonId: strin
 
 export type CharacterClass = 'warrior' | 'mage' | 'rogue';
 
+export type Gender = 'female' | 'male' | 'nonbinary';
+
 export type EntityKind = 'player' | 'monster';
 
 export type Equipment = {
@@ -36,12 +38,27 @@ export type Entity = {
   equipment: Equipment;
 
   classType?: CharacterClass;
+  gender?: Gender;
   strength?: number;
   agility?: number;
   intellect?: number;
   statusEffects?: StatusEffect[];
   specialCooldown?: number;
   isBoss?: boolean;
+};
+
+export type StoryEvent = {
+  turn: number;
+  title: string;
+  detail: string;
+};
+
+export type CharacterStory = {
+  origin: string;
+  upbringing: string;
+  turningPoint: string;
+  ambitions: string;
+  events: StoryEvent[];
 };
 
 export type GearRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
@@ -95,6 +112,7 @@ export type Action =
   | { kind: 'toggleInventory' }
   | { kind: 'toggleShop' }
   | { kind: 'toggleQuest' }
+  | { kind: 'toggleStory' }
   | { kind: 'toggleMap' }
   | { kind: 'cancelAuto' }
   | { kind: 'toggleRenderer' }

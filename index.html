@@ -94,6 +94,46 @@
         flex-wrap: wrap;
         align-items: center;
       }
+      .menu {
+        position: relative;
+      }
+      .menu summary {
+        list-style: none;
+      }
+      .menu summary::-webkit-details-marker {
+        display: none;
+      }
+      .menu summary::after {
+        content: '▾';
+        margin-left: 6px;
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .menuList {
+        position: absolute;
+        top: 110%;
+        left: 0;
+        min-width: 180px;
+        padding: 8px;
+        display: grid;
+        gap: 6px;
+        background: linear-gradient(180deg, #221a12, #1a140e);
+        border: 1px solid var(--panel-edge);
+        border-radius: 12px;
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+        z-index: 10;
+      }
+      .menuList button {
+        width: 100%;
+        text-align: left;
+      }
+      .menuLabel {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #e6d3ad;
+        margin-top: 2px;
+      }
       button {
         background: linear-gradient(180deg, #2e2217, #20160f);
         color: var(--text);
@@ -104,6 +144,21 @@
         box-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
         font-family: 'Cinzel', 'Times New Roman', serif;
         letter-spacing: 0.02em;
+      }
+      summary.btnTiny,
+      select.btnTiny {
+        background: linear-gradient(180deg, #2e2217, #20160f);
+        color: var(--text);
+        border: 1px solid var(--panel-edge);
+        border-radius: 10px;
+        padding: 6px 10px;
+        cursor: pointer;
+        box-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+        font-family: 'Cinzel', 'Times New Roman', serif;
+        letter-spacing: 0.02em;
+      }
+      select.btnTiny {
+        appearance: none;
       }
       button:hover {
         filter: brightness(1.1);
@@ -406,7 +461,9 @@
           <span
             class="pill"
             id="renderPill"></span>
-          <span class="hint"
+          <span
+            class="hint"
+            id="controlsHint"
             >Move WASD/Arrows • Shift+Move run • M map • Enter use • I inventory • B shop • Q quests • G pick up • R renderer • F FOV • P save • O
             load</span
           >
@@ -426,35 +483,70 @@
 
       <div id="side">
         <div class="row">
-          <button
-            id="btnAscii"
-            class="btnHidden"
-            type="button">
-            ASCII
-          </button>
-          <button id="btnCanvas">Canvas</button>
-          <button id="btnNewSeed">New Seed</button>
-          <button id="btnSave">Save</button>
-          <button id="btnLoad">Load</button>
-          <button id="btnExportSave">Export Save</button>
-          <button id="btnImportSave">Import Save</button>
-          <button id="btnInv">Inventory</button>
-          <button id="btnShop">Shop</button>
-          <button id="btnMap">Map</button>
+          <details class="menu">
+            <summary
+              class="btnTiny"
+              id="menuActionsLabel">
+              Actions
+            </summary>
+            <div class="menuList">
+              <div class="menuLabel">Game</div>
+              <button id="btnNewSeed">New Seed</button>
+              <button id="btnSave">Save</button>
+              <button id="btnLoad">Load</button>
+              <div class="menuLabel">Share</div>
+              <button id="btnExportSave">Export Save</button>
+              <button id="btnImportSave">Import Save</button>
+            </div>
+          </details>
+
+          <details class="menu">
+            <summary
+              class="btnTiny"
+              id="menuPanelsLabel">
+              Panels
+            </summary>
+            <div class="menuList">
+              <button id="btnInv">Inventory</button>
+              <button id="btnShop">Shop</button>
+              <button id="btnStory">Story</button>
+              <button id="btnMap">Map</button>
+            </div>
+          </details>
+
+          <details class="menu">
+            <summary
+              class="btnTiny"
+              id="menuRenderLabel">
+              Render
+            </summary>
+            <div class="menuList">
+              <button
+                id="btnAscii"
+                class="btnHidden"
+                type="button">
+                ASCII
+              </button>
+              <button id="btnCanvas">Canvas</button>
+            </div>
+          </details>
         </div>
 
         <div class="hint marginTop10">
-          Enjoying the adventure?
+          <span id="supportLead">Enjoying the adventure?</span>
           <a
+            id="supportLink"
             href="https://buymeacoffee.com/figuremodel"
             target="_blank"
             rel="noopener"
             >Buy me a coffee</a
           >
-          to keep it going.
+          <span id="supportTail">to keep it going.</span>
         </div>
 
-        <div class="hint marginTop10">
+        <div
+          class="hint marginTop10"
+          id="overworldHint">
           Overworld: <b>D</b> dungeons, <b>T</b> towns, <b>=</b> roads. Press <b>M</b> for map + auto-walk (Enter to set destination). Dungeons have
           levels (<b>&gt;</b>/<b>&lt;</b>). Monsters use A* pathing when they can see you.
         </div>
@@ -469,8 +561,8 @@
       id="classSelect"
       class="classSelectOverlay">
       <div class="classSelectCard">
-        <h2>Select Your Adventurer</h2>
-        <p>Each hero fights differently. Pick the style that suits you.</p>
+        <h2 id="classSelectTitle">Select Your Adventurer</h2>
+        <p id="classSelectSubtitle">Each hero fights differently. Pick the style that suits you.</p>
         <div class="classGrid">
           <button
             type="button"
@@ -496,6 +588,22 @@
             <span>Harness arcane power to burn through defenses.</span>
             <small>Strength 2 • Agility 3 • Intellect 7</small>
           </button>
+        </div>
+        <div class="sep"></div>
+        <div class="row">
+          <label
+            class="small"
+            id="genderLabel"
+            for="genderSelect"
+            >Gender</label
+          >
+          <select
+            id="genderSelect"
+            class="btnTiny">
+            <option value="female">Female</option>
+            <option value="male">Male</option>
+            <option value="nonbinary">Non-binary</option>
+          </select>
         </div>
         <button
           id="btnLoadFromModal"
