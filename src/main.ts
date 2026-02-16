@@ -16,6 +16,7 @@ import { generateTown, getTownTile } from './maps/town';
 import { computeDungeonFov, decayVisibilityToSeen } from './systems/fov';
 import { canEnterDungeonTile, canEnterOverworldTile, canEnterTownTile, isBlockedByEntity } from './systems/rules';
 import { nextMonsterStep } from './systems/ai';
+import { renderAscii } from './render/ascii';
 import { PixiRenderer } from './render/pixi';
 import { MessageLog } from './ui/log';
 import { loadFromBase62String, loadFromLocalStorage, saveToLocalStorage, serializeSaveDataBase62, type SaveDataV3 } from './core/save';
@@ -683,6 +684,7 @@ function createClassUpgradeItem(classType: CharacterClass, slot: 'weapon' | 'arm
 
 const asciiEl: HTMLElement = document.getElementById('ascii')!;
 const canvasWrap: HTMLElement = document.getElementById('canvasWrap')!;
+const hudBarEl: HTMLElement = document.getElementById('hudBar')!;
 const modePill: HTMLElement = document.getElementById('modePill')!;
 const renderPill: HTMLElement = document.getElementById('renderPill')!;
 const statsEl: HTMLElement = document.getElementById('stats')!;
@@ -696,6 +698,7 @@ const overworldHintEl: HTMLElement = document.getElementById('overworldHint')!;
 const menuActionsLabel: HTMLElement = document.getElementById('menuActionsLabel')!;
 const menuPanelsLabel: HTMLElement = document.getElementById('menuPanelsLabel')!;
 const menuRenderLabel: HTMLElement = document.getElementById('menuRenderLabel')!;
+const nameLabel: HTMLElement = document.getElementById('nameLabel')!;
 const genderLabel: HTMLElement = document.getElementById('genderLabel')!;
 
 const btnAscii: HTMLButtonElement = document.getElementById('btnAscii') as HTMLButtonElement;
@@ -719,6 +722,9 @@ const classModal: HTMLElement = document.getElementById('classSelect')!;
 const classSelectTitle: HTMLElement = document.getElementById('classSelectTitle')!;
 const classSelectSubtitle: HTMLElement = document.getElementById('classSelectSubtitle')!;
 const classButtons: HTMLButtonElement[] = Array.from(classModal.querySelectorAll<HTMLButtonElement>('[data-class]'));
+const nameInput: HTMLInputElement = document.getElementById('nameInput') as HTMLInputElement;
+const nameErrorEl: HTMLElement = document.getElementById('nameError')!;
+const btnNameRandom: HTMLButtonElement = document.getElementById('btnNameRandom') as HTMLButtonElement;
 const genderSelect: HTMLSelectElement = document.getElementById('genderSelect') as HTMLSelectElement;
 const btnLoadFromModal: HTMLButtonElement = document.getElementById('btnLoadFromModal') as HTMLButtonElement;
 
@@ -736,8 +742,8 @@ let saveModalMode: SaveModalMode = 'export';
 let pendingSeed: number = Date.now() & 0xffffffff;
 let pendingClass: CharacterClass = 'warrior';
 let pendingGender: Gender = 'female';
+let pendingName: string = '';
 canvasWrap.classList.add('displayNone');
-btnAscii.style.display = 'none';
 
 function applyStaticI18n(): void {
   document.title = t('app.title');
@@ -758,6 +764,7 @@ function applyStaticI18n(): void {
   menuActionsLabel.textContent = t('ui.menu.actions');
   menuPanelsLabel.textContent = t('ui.menu.panels');
   menuRenderLabel.textContent = t('ui.menu.render');
+  nameLabel.textContent = t('ui.name.label');
   genderLabel.textContent = t('ui.gender.label');
 
   btnAscii.textContent = t('ui.buttons.ascii');
@@ -775,6 +782,11 @@ function applyStaticI18n(): void {
   classSelectTitle.textContent = t('ui.classSelect.title');
   classSelectSubtitle.textContent = t('ui.classSelect.subtitle');
   btnLoadFromModal.textContent = t('ui.classSelect.load');
+  btnNameRandom.textContent = t('ui.name.random');
+
+  nameInput.placeholder = t('ui.name.placeholder');
+  nameInput.value = pendingName;
+  nameErrorEl.textContent = '';
 
   const genderOptions: Array<{ key: Gender; label: string }> = [
     { key: 'female', label: t('gender.female') },
@@ -808,7 +820,46 @@ function applyStaticI18n(): void {
 
 applyStaticI18n();
 
-function newGame(worldSeed: number, classChoice: CharacterClass, gender: Gender): GameState {
+function normalizePlayerName(raw: string): string {
+  const trimmed: string = raw.trim().replace(/\s+/g, ' ');
+  if (!trimmed) {
+    return t('entity.playerName');
+  }
+  return trimmed.slice(0, 24);
+}
+
+function validatePlayerName(raw: string): { ok: boolean; message: string } {
+  const name: string = normalizePlayerName(raw);
+  if (name.length < 2) {
+    return { ok: false, message: t('ui.name.error.length') };
+  }
+  if (!/^[A-Za-z][A-Za-z '\-]*$/.test(name)) {
+    return { ok: false, message: t('ui.name.error.chars') };
+  }
+  if (/^[-']|[-']$/.test(name)) {
+    return { ok: false, message: t('ui.name.error.punct') };
+  }
+  return { ok: true, message: '' };
+}
+
+function generateRandomName(): string {
+  const starts: string[] = ['Ar', 'Bel', 'Cor', 'Dar', 'El', 'Fa', 'Gal', 'Hal', 'Is', 'Ka', 'Lor', 'Ma', 'Nor', 'Or', 'Per'];
+  const mids: string[] = ['a', 'e', 'i', 'o', 'u', 'ae', 'ia', 'eo', 'io', 'oa'];
+  const ends: string[] = ['dor', 'lin', 'mar', 'ric', 'vyn', 'dell', 'ran', 'reth', 'thas', 'mir', 'win', 'gorn', 'sor', 'len', 'var'];
+  const secondEnds: string[] = ['a', 'ia', 'el', 'wyn', 'is', 'eth', 'ara', 'en', 'ys', 'iel'];
+  const useSecond: boolean = Math.random() < 0.35;
+  const name: string =
+    starts[Math.floor(Math.random() * starts.length)] +
+    mids[Math.floor(Math.random() * mids.length)] +
+    ends[Math.floor(Math.random() * ends.length)] +
+    (useSecond ? secondEnds[Math.floor(Math.random() * secondEnds.length)] : '');
+  return name.slice(0, 24);
+}
+
+pendingName = generateRandomName();
+nameInput.value = pendingName;
+
+function newGame(worldSeed: number, classChoice: CharacterClass, gender: Gender, name: string): GameState {
   const rng: Rng = new Rng(worldSeed);
   const overworld: Overworld = new Overworld(worldSeed);
   const cfg: ClassConfig = CLASS_CONFIG[classChoice];
@@ -817,7 +868,7 @@ function newGame(worldSeed: number, classChoice: CharacterClass, gender: Gender)
   const player: Entity = {
     id: 'player',
     kind: 'player',
-    name: t('entity.playerName'),
+    name,
     glyph: '@',
     pos: findStartPosition(overworld, rng),
     mapRef: { kind: 'overworld' },
@@ -887,7 +938,7 @@ function findStartPosition(overworld: Overworld, rng: Rng): Point {
   return { x: 0, y: 0 };
 }
 
-let state: GameState = newGame(pendingSeed, pendingClass, pendingGender);
+let state: GameState = newGame(pendingSeed, pendingClass, pendingGender, pendingName);
 
 function hideClassModal(): void {
   classModal.classList.add('hidden');
@@ -895,6 +946,14 @@ function hideClassModal(): void {
 
 function showClassModal(): void {
   classModal.classList.remove('hidden');
+  if (!pendingName) {
+    pendingName = generateRandomName();
+  }
+  nameInput.value = pendingName;
+  nameInput.classList.remove('invalid');
+  nameErrorEl.textContent = '';
+  nameInput.focus();
+  nameInput.select();
 }
 
 function isClassModalVisible(): boolean {
@@ -905,7 +964,25 @@ function startNewRun(classChoice: CharacterClass): void {
   pendingClass = classChoice;
   const gender = (genderSelect.value as Gender) || pendingGender;
   pendingGender = gender;
-  state = newGame(pendingSeed, classChoice, gender);
+  let rawName: string = nameInput.value;
+  if (!rawName.trim()) {
+    const generated: string = generateRandomName();
+    nameInput.value = generated;
+    rawName = generated;
+  }
+  const name: string = normalizePlayerName(rawName);
+  const validation = validatePlayerName(name);
+  if (!validation.ok) {
+    nameInput.classList.add('invalid');
+    nameErrorEl.textContent = validation.message;
+    nameInput.focus();
+    nameInput.select();
+    return;
+  }
+  pendingName = name;
+  nameInput.classList.remove('invalid');
+  nameErrorEl.textContent = '';
+  state = newGame(pendingSeed, classChoice, gender, name);
   hideClassModal();
   syncRendererUi();
   render();
@@ -1694,8 +1771,14 @@ function removeDeadEntities(s: GameState): void {
 
 function handleAction(action: Action): void {
   if (action.kind === 'toggleRenderer') {
-    state.rendererMode = state.rendererMode === 'isometric' ? 'canvas' : 'isometric';
-    state.log.push(state.rendererMode === 'isometric' ? t('log.renderer.iso') : t('log.renderer.topdown'));
+    state.rendererMode = state.rendererMode === 'isometric' ? 'canvas' : state.rendererMode === 'canvas' ? 'ascii' : 'isometric';
+    state.log.push(
+      state.rendererMode === 'isometric'
+        ? t('log.renderer.iso')
+        : state.rendererMode === 'canvas'
+          ? t('log.renderer.topdown')
+          : t('log.renderer.ascii')
+    );
     syncRendererUi();
     render();
     return;
@@ -2523,6 +2606,11 @@ function setDestination(dest: Point): void {
 }
 
 function syncRendererUi(): void {
+  if (state.rendererMode === 'ascii') {
+    asciiEl.style.display = 'block';
+    canvasWrap.style.display = 'none';
+    return;
+  }
   asciiEl.style.display = 'none';
   canvasWrap.style.display = 'block';
 }
@@ -2541,7 +2629,10 @@ function render(): void {
             theme: dungeon?.theme ? t(`theme.${dungeon.theme}`) : '?'
           });
 
-  renderPill.textContent = t('ui.render.pill', { fov: state.useFov ? t('ui.fov.on') : t('ui.fov.off') });
+  renderPill.textContent = t('ui.render.pill', {
+    renderer: t(`ui.render.${state.rendererMode}`),
+    fov: state.useFov ? t('ui.fov.on') : t('ui.fov.off')
+  });
 
   if (state.mode === 'dungeon' && dungeon && state.useFov) {
     decayVisibilityToSeen(dungeon);
@@ -2554,8 +2645,30 @@ function render(): void {
   const str: number = state.player.strength ?? 0;
   const agi: number = state.player.agility ?? 0;
   const intl: number = state.player.intellect ?? 0;
+  const nextXp: number = xpToNextLevel(state.player.level);
+  const hpRatio: number = Math.max(0, Math.min(1, state.player.hp / Math.max(1, state.player.maxHp)));
+  const xpRatio: number = Math.max(0, Math.min(1, state.player.xp / Math.max(1, nextXp)));
 
   const statusText: string = (state.player.statusEffects ?? []).map((e) => `${t(`status.${e.kind}`)}:${e.remainingTurns}`).join(', ') || t('ui.none');
+
+  hudBarEl.innerHTML = `
+    <div class="hudBarRow">
+      <div class="hudBarItem">
+        <div class="hudBarLabel">${escapeHtml(t('ui.stats.hp', { hp: state.player.hp, maxHp: state.player.maxHp }))}</div>
+        <div class="hudBarTrack">
+          <div class="hudBarFill hp" style="width: ${Math.round(hpRatio * 100)}%"></div>
+          <div class="hudBarText">${escapeHtml(t('ui.stats.level', { level: state.player.level }))}</div>
+        </div>
+      </div>
+      <div class="hudBarItem">
+        <div class="hudBarLabel">${escapeHtml(t('ui.stats.xp', { xp: state.player.xp, next: nextXp }))}</div>
+        <div class="hudBarTrack">
+          <div class="hudBarFill xp" style="width: ${Math.round(xpRatio * 100)}%"></div>
+          <div class="hudBarText">${escapeHtml(t('ui.stats.gold', { gold: state.player.gold }))}</div>
+        </div>
+      </div>
+    </div>
+  `;
 
   statsEl.innerHTML = `
     <div class="kv"><div><b>${escapeHtml(state.player.name)}</b> <span class="muted">${escapeHtml(
@@ -2565,7 +2678,7 @@ function render(): void {
       t('ui.stats.statsLine', { str, agi, int: intl })
     )}</div></div>
     <div class="kv small"><div>${escapeHtml(t('ui.stats.atk', { atk }))}</div><div>${escapeHtml(t('ui.stats.def', { def }))}</div></div>
-    <div class="kv small"><div>${escapeHtml(t('ui.stats.xp', { xp: state.player.xp, next: xpToNextLevel(state.player.level) }))}</div><div>${escapeHtml(
+    <div class="kv small"><div>${escapeHtml(t('ui.stats.xp', { xp: state.player.xp, next: nextXp }))}</div><div>${escapeHtml(
       t('ui.stats.gold', { gold: state.player.gold })
     )}</div></div>
     <div class="kv small"><div>${escapeHtml(t('ui.stats.pos', { x: state.player.pos.x, y: state.player.pos.y }))}</div><div class="muted">${escapeHtml(
@@ -2625,6 +2738,26 @@ function render(): void {
       41
     );
 
+    return;
+  }
+
+  if (state.rendererMode === 'ascii') {
+    asciiEl.style.display = 'block';
+    canvasWrap.style.display = 'none';
+    asciiEl.textContent = renderAscii(
+      {
+        mode: state.mode,
+        overworld: state.overworld,
+        dungeon,
+        town,
+        player: state.player,
+        entities: state.entities,
+        items: state.items,
+        useFov: state.useFov
+      },
+      PIXI_VIEW_W,
+      PIXI_VIEW_H
+    );
     return;
   }
 
@@ -3066,7 +3199,9 @@ window.addEventListener('keydown', (e: KeyboardEvent) => {
 });
 
 btnAscii.addEventListener('click', () => {
-  state.log.push(t('log.renderer.asciiDisabled'));
+  state.rendererMode = 'ascii';
+  state.log.push(t('log.renderer.ascii'));
+  syncRendererUi();
   render();
 });
 
@@ -3121,6 +3256,33 @@ classButtons.forEach((btn) => {
     }
     startNewRun(choice);
   });
+});
+
+nameInput.addEventListener('input', () => {
+  const trimmed: string = nameInput.value.trim();
+  if (!trimmed) {
+    nameInput.classList.remove('invalid');
+    nameErrorEl.textContent = '';
+    return;
+  }
+  const validation = validatePlayerName(nameInput.value);
+  if (validation.ok) {
+    nameInput.classList.remove('invalid');
+    nameErrorEl.textContent = '';
+  } else {
+    nameInput.classList.add('invalid');
+    nameErrorEl.textContent = validation.message;
+  }
+});
+
+btnNameRandom.addEventListener('click', () => {
+  const name: string = generateRandomName();
+  nameInput.value = name;
+  pendingName = name;
+  nameInput.classList.remove('invalid');
+  nameErrorEl.textContent = '';
+  nameInput.focus();
+  nameInput.select();
 });
 
 btnLoadFromModal.addEventListener('click', () => {

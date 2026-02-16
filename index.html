@@ -1,13 +1,83 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- Google tag (gtag.js) -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-54MF63QMDH"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag('js', new Date());
+
+      gtag('config', 'G-54MF63QMDH');
+    </script>
     <meta charset="UTF-8" />
     <meta
       name="viewport"
       content="width=device-width,initial-scale=1" />
     <title>Ancient Realms of Mystery</title>
+    <meta
+      name="description"
+      content="Ancient Realms of Mystery is a browser roguelike with overworld exploration, towns, dungeons, loot, and turn-based combat." />
+    <meta
+      name="keywords"
+      content="roguelike, dungeon crawler, fantasy, pixel art, browser game, turn-based" />
+    <meta
+      name="robots"
+      content="index,follow" />
+    <meta
+      name="theme-color"
+      content="#1b140e" />
+    <link
+      rel="canonical"
+      href="https://ancientrealmsofmystery.com/" />
+    <meta
+      property="og:title"
+      content="Ancient Realms of Mystery" />
+    <meta
+      property="og:description"
+      content="A browser roguelike with overworld exploration, towns, dungeons, loot, and turn-based combat." />
+    <meta
+      property="og:url"
+      content="https://ancientrealmsofmystery.com/" />
+    <meta
+      property="og:type"
+      content="website" />
+    <meta
+      property="og:site_name"
+      content="Ancient Realms of Mystery" />
+    <meta
+      property="og:image"
+      content="https://ancientrealmsofmystery.com/og/og-image.png" />
+    <meta
+      name="twitter:card"
+      content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="Ancient Realms of Mystery" />
+    <meta
+      name="twitter:description"
+      content="A browser roguelike with overworld exploration, towns, dungeons, loot, and turn-based combat." />
+    <meta
+      name="twitter:image"
+      content="https://ancientrealmsofmystery.com/og/og-image.png" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "Ancient Realms of Mystery",
+        "description": "A browser roguelike with overworld exploration, towns, dungeons, loot, and turn-based combat.",
+        "url": "https://ancientrealmsofmystery.com/",
+        "image": "https://ancientrealmsofmystery.com/og/og-image.png",
+        "genre": "Roguelike",
+        "applicationCategory": "Game",
+        "operatingSystem": "Any"
+      }
+    </script>
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=IM+Fell+English:ital,wght@0,400;1,400&display=swap');
       :root {
         color-scheme: dark;
         --bg-ink: #1b140e;
@@ -28,7 +98,7 @@
           repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0 6px, rgba(0, 0, 0, 0.02) 6px 12px),
           linear-gradient(180deg, var(--bg-ink), var(--bg-shadow));
         color: var(--text);
-        font-family: 'IM Fell English', 'Times New Roman', serif;
+        font-family: Georgia, 'Times New Roman', serif;
         margin: 0;
         padding: 12px;
       }
@@ -41,13 +111,62 @@
       #ascii {
         white-space: pre;
         line-height: 1.05em;
-        font-size: 14px;
+        font-size: 18px;
         border: 1px solid var(--panel-edge);
         border-radius: 12px;
         padding: 12px;
         background: linear-gradient(180deg, #1a130d, #140f0b);
         box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
         min-height: 560px;
+      }
+      #hudBar {
+        border: 1px solid var(--panel-edge);
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: linear-gradient(180deg, #1b140e, #140f0b);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+      }
+      .hudBarRow {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        align-items: center;
+      }
+      .hudBarItem {
+        display: grid;
+        gap: 4px;
+      }
+      .hudBarLabel {
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .hudBarTrack {
+        position: relative;
+        height: 14px;
+        background: #1c140f;
+        border: 1px solid var(--panel-edge);
+        border-radius: 999px;
+        overflow: hidden;
+      }
+      .hudBarFill {
+        height: 100%;
+        width: 0;
+      }
+      .hudBarFill.hp {
+        background: linear-gradient(90deg, #6b2c24, #b04a3d);
+      }
+      .hudBarFill.xp {
+        background: linear-gradient(90deg, #6f5a2c, #d7b46a);
+      }
+      .hudBarText {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        color: #f3e8d3;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
       }
       #canvasWrap {
         border: 1px solid var(--panel-edge);
@@ -86,7 +205,7 @@
       }
       .hint {
         color: var(--muted);
-        font-size: 12px;
+        font-size: 14px;
       }
       .row {
         display: flex;
@@ -106,7 +225,7 @@
       .menu summary::after {
         content: '▾';
         margin-left: 6px;
-        font-size: 10px;
+        font-size: 12px;
         color: var(--muted);
       }
       .menuList {
@@ -128,7 +247,7 @@
         text-align: left;
       }
       .menuLabel {
-        font-size: 11px;
+        font-size: 13px;
         text-transform: uppercase;
         letter-spacing: 0.12em;
         color: #e6d3ad;
@@ -142,7 +261,7 @@
         padding: 8px 12px;
         cursor: pointer;
         box-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
-        font-family: 'Cinzel', 'Times New Roman', serif;
+        font-family: Georgia, 'Times New Roman', serif;
         letter-spacing: 0.02em;
       }
       summary.btnTiny,
@@ -154,8 +273,27 @@
         padding: 6px 10px;
         cursor: pointer;
         box-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
-        font-family: 'Cinzel', 'Times New Roman', serif;
+        font-family: Georgia, 'Times New Roman', serif;
         letter-spacing: 0.02em;
+      }
+      input.textInput {
+        background: linear-gradient(180deg, #2e2217, #20160f);
+        color: var(--text);
+        border: 1px solid var(--panel-edge);
+        border-radius: 10px;
+        padding: 6px 10px;
+        font-family: Georgia, 'Times New Roman', serif;
+        letter-spacing: 0.02em;
+        flex: 1;
+        min-width: 180px;
+      }
+      input.textInput.invalid {
+        border-color: #7a3c2a;
+        box-shadow: 0 0 0 2px rgba(122, 60, 42, 0.2);
+      }
+      .inputErrorText {
+        color: #f2b1a2;
+        font-size: 14px;
       }
       select.btnTiny {
         appearance: none;
@@ -174,8 +312,8 @@
         border-radius: 999px;
         border: 1px solid var(--panel-edge);
         background: #1f1711;
-        font-size: 12px;
-        font-family: 'Cinzel', 'Times New Roman', serif;
+        font-size: 14px;
+        font-family: Georgia, 'Times New Roman', serif;
       }
       .kv {
         display: flex;
@@ -183,7 +321,7 @@
         gap: 10px;
       }
       .small {
-        font-size: 12px;
+        font-size: 14px;
         color: var(--muted);
       }
       .muted {
@@ -196,7 +334,7 @@
         display: flex;
         justify-content: space-between;
         align-items: baseline;
-        font-family: 'Cinzel', 'Times New Roman', serif;
+        font-family: Georgia, 'Times New Roman', serif;
         letter-spacing: 0.04em;
       }
       .panelMeta {
@@ -206,9 +344,9 @@
         color: #d6c5a2;
       }
       .panelSectionTitle {
-        font-family: 'Cinzel', 'Times New Roman', serif;
+        font-family: Georgia, 'Times New Roman', serif;
         text-transform: uppercase;
-        font-size: 11px;
+        font-size: 13px;
         letter-spacing: 0.12em;
         color: #e6d3ad;
       }
@@ -221,14 +359,14 @@
       .btnTiny {
         padding: 4px 8px;
         border-radius: 8px;
-        font-size: 12px;
+        font-size: 14px;
       }
       .sep {
         border-top: 1px solid var(--panel-edge);
         margin: 8px 0;
       }
       .tag {
-        font-size: 11px;
+        font-size: 13px;
         padding: 2px 6px;
         border: 1px solid var(--panel-edge);
         border-radius: 999px;
@@ -245,7 +383,7 @@
         margin-right: 6px;
         padding: 1px 6px;
         border-radius: 999px;
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 600;
         letter-spacing: 0.04em;
         text-transform: uppercase;
@@ -441,12 +579,20 @@
       a {
         color: #f1d7a1;
       }
-      @media (max-width: 980px) {
+      @media (max-width: 1500px) {
         .wrap {
           grid-template-columns: 1fr;
         }
+        .hudBarRow {
+          grid-template-columns: 1fr;
+        }
+        #ascii,
+        #canvasWrap,
         #side {
-          order: 2;
+          width: 100%;
+        }
+        #gameCanvas {
+          max-width: 100%;
         }
       }
     </style>
@@ -454,6 +600,9 @@
   <body>
     <div class="wrap">
       <div>
+        <div
+          id="hudBar"
+          class="hudBar"></div>
         <div class="row marginBottom10">
           <span
             class="pill"
@@ -523,7 +672,6 @@
             <div class="menuList">
               <button
                 id="btnAscii"
-                class="btnHidden"
                 type="button">
                 ASCII
               </button>
@@ -531,14 +679,13 @@
             </div>
           </details>
         </div>
-
         <div class="hint marginTop10">
           <span id="supportLead">Enjoying the adventure?</span>
           <a
             id="supportLink"
             href="https://buymeacoffee.com/figuremodel"
             target="_blank"
-            rel="noopener"
+            rel="noopener noreferrer"
             >Buy me a coffee</a
           >
           <span id="supportTail">to keep it going.</span>
@@ -563,6 +710,46 @@
       <div class="classSelectCard">
         <h2 id="classSelectTitle">Select Your Adventurer</h2>
         <p id="classSelectSubtitle">Each hero fights differently. Pick the style that suits you.</p>
+        <div class="row marginTop12">
+          <label
+            class="small"
+            id="nameLabel"
+            for="nameInput"
+            >Name</label
+          >
+          <input
+            id="nameInput"
+            class="textInput"
+            type="text"
+            maxlength="24"
+            autocomplete="off"
+            spellcheck="false" />
+          <button
+            id="btnNameRandom"
+            type="button"
+            class="btnTiny">
+            Random
+          </button>
+        </div>
+        <div
+          id="nameError"
+          class="inputErrorText marginTop10"></div>
+        <div class="row marginTop12">
+          <label
+            class="small"
+            id="genderLabel"
+            for="genderSelect"
+            >Gender</label
+          >
+          <select
+            id="genderSelect"
+            class="btnTiny">
+            <option value="female">Female</option>
+            <option value="male">Male</option>
+            <option value="nonbinary">Non-binary</option>
+          </select>
+        </div>
+        <div class="sep"></div>
         <div class="classGrid">
           <button
             type="button"
@@ -588,22 +775,6 @@
             <span>Harness arcane power to burn through defenses.</span>
             <small>Strength 2 • Agility 3 • Intellect 7</small>
           </button>
-        </div>
-        <div class="sep"></div>
-        <div class="row">
-          <label
-            class="small"
-            id="genderLabel"
-            for="genderSelect"
-            >Gender</label
-          >
-          <select
-            id="genderSelect"
-            class="btnTiny">
-            <option value="female">Female</option>
-            <option value="male">Male</option>
-            <option value="nonbinary">Non-binary</option>
-          </select>
         </div>
         <button
           id="btnLoadFromModal"
