@@ -456,11 +456,21 @@ export class SpriteAtlas {
   }
 
   private patternDungeonEntrance(ctx: CanvasRenderingContext2D): void {
-    this.fill(ctx, '#4b2f1f', '#5d3a24');
-    ctx.fillStyle = '#f0d9b8';
-    ctx.fillRect(5, 6, 6, 8);
-    ctx.fillStyle = '#1b120b';
-    ctx.fillRect(6, 8, 4, 6);
+    this.fill(ctx, '#2b2016', '#3a2b1f');
+    // Stone surround
+    ctx.fillStyle = '#d2b996';
+    ctx.fillRect(2, 3, 12, 11);
+    ctx.fillStyle = '#3a2a1e';
+    ctx.fillRect(3, 4, 10, 9);
+    // Stairs descending
+    ctx.fillStyle = '#c3a579';
+    ctx.fillRect(4, 6, 8, 2);
+    ctx.fillStyle = '#ad8f67';
+    ctx.fillRect(5, 8, 6, 2);
+    ctx.fillStyle = '#967855';
+    ctx.fillRect(6, 10, 4, 2);
+    ctx.fillStyle = '#0b0a08';
+    ctx.fillRect(7, 12, 2, 1);
   }
 
   private patternStone(ctx: CanvasRenderingContext2D, base: string, highlight: string): void {

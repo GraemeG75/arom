@@ -250,9 +250,13 @@ export class PixiRenderer {
   }
 
   private renderIsometric(ctx: PixiRenderContext, viewWidth: number, viewHeight: number): void {
-    const pad: number = Math.max(2, Math.ceil(Math.max(viewWidth, viewHeight) / 2));
-    const renderW: number = viewWidth + pad;
-    const renderH: number = viewHeight + pad;
+    const isoTileW: number = this.tileSize * 2;
+    const isoTileH: number = this.tileSize;
+    const needX: number = Math.max(1, Math.ceil(this.app.renderer.width / (isoTileW / 2)) + 2);
+    const needY: number = Math.max(1, Math.ceil(this.app.renderer.height / (isoTileH / 2)) + 2);
+    const span: number = Math.max(needX, needY);
+    const renderW: number = span;
+    const renderH: number = span;
     const originX: number = ctx.player.pos.x;
     const originY: number = ctx.player.pos.y;
     const halfW: number = Math.floor(renderW / 2);
@@ -260,8 +264,6 @@ export class PixiRenderer {
     const lightRadius: number = Math.max(halfW, halfH) + 1;
     const now: number = performance.now();
 
-    const isoTileW: number = this.tileSize * 2;
-    const isoTileH: number = this.tileSize;
     const centerX: number = Math.floor(this.app.renderer.width / 2) - Math.floor(isoTileW / 2);
     const centerY: number = Math.floor(this.app.renderer.height / 2) - Math.floor(isoTileH / 2);
 
@@ -336,6 +338,17 @@ export class PixiRenderer {
       sprite.height = isoTileH + tileHeight;
       sprite.alpha = t.alpha;
       this.tileLayer.addChild(sprite);
+
+      if (t.kind === 'overworld' && t.tile === 'dungeon') {
+        const glow = new Sprite(this.getIsoDungeonGlowTexture(isoTileW, isoTileH));
+        const pulse: number = 0.55 + Math.sin(now / 420 + this.phaseFromId(`${t.wx},${t.wy}`)) * 0.2;
+        glow.x = screen.x;
+        glow.y = screen.y - tileHeight;
+        glow.width = isoTileW;
+        glow.height = isoTileH;
+        glow.alpha = pulse;
+        this.overlayLayer.addChild(glow);
+      }
     }
 
     // Highlight the player's tile for readability (under entities).
@@ -518,6 +531,47 @@ export class PixiRenderer {
     ctx.strokeStyle = 'rgba(255, 240, 210, 0.7)';
     ctx.lineWidth = 1;
     ctx.stroke();
+
+    const texture: Texture = Texture.from(canvas);
+    this.textures.set(cacheKey, texture);
+    return texture;
+  }
+
+  private getIsoDungeonGlowTexture(isoTileW: number, isoTileH: number): Texture {
+    const cacheKey: string = `iso_dungeon_glow_${isoTileW}x${isoTileH}`;
+    const cached: Texture | undefined = this.textures.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const canvas: HTMLCanvasElement = document.createElement('canvas');
+    canvas.width = isoTileW;
+    canvas.height = isoTileH;
+    const ctx: CanvasRenderingContext2D | null = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Canvas not available for iso dungeon glow.');
+    }
+
+    const w: number = canvas.width;
+    const h: number = canvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(w / 2, 0);
+    ctx.lineTo(w, h / 2);
+    ctx.lineTo(w / 2, h);
+    ctx.lineTo(0, h / 2);
+    ctx.closePath();
+    ctx.clip();
+
+    const gradient: CanvasGradient = ctx.createRadialGradient(w / 2, h / 2, 1, w / 2, h / 2, w * 0.55);
+    gradient.addColorStop(0, 'rgba(255, 210, 130, 0.9)');
+    gradient.addColorStop(0.55, 'rgba(255, 150, 70, 0.45)');
+    gradient.addColorStop(1, 'rgba(255, 120, 50, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
 
     const texture: Texture = Texture.from(canvas);
     this.textures.set(cacheKey, texture);

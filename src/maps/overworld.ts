@@ -23,7 +23,8 @@ const FOREST_SECONDARY_WEIGHT: number = 0.45;
 const FOREST_DENSITY: number = 0.52;
 const ROAD_NOISE_FREQ: number = 18;
 const ROAD_BAND_WIDTH: number = 0.06;
-const POI_PERIOD: number = 4096;
+const POI_PERIOD: number = 2048;
+const DUNGEON_SPAWN_THRESHOLD: number = 3;
 const TOWN_RADIUS: number = 4;
 
 export class Overworld {
@@ -52,7 +53,7 @@ export class Overworld {
     // Points of interest override base terrain but only spawn on walkable tiles.
     if (tile !== 'water' && tile !== 'water_deep' && tile !== 'mountain' && tile !== 'mountain_snow') {
       const poiNoise: number = this.sampleFine(POI_SALT, x, y) % POI_PERIOD;
-      if (poiNoise === 1) {
+      if (poiNoise < DUNGEON_SPAWN_THRESHOLD) {
         tile = 'dungeon';
       }
     }
