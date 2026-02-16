@@ -1,8 +1,10 @@
 export type SpriteKey =
+  | 'ow_water_deep'
   | 'ow_water'
   | 'ow_grass'
   | 'ow_forest'
   | 'ow_mountain'
+  | 'ow_mountain_snow'
   | 'ow_road'
   | 'ow_town'
   | 'ow_town_ground'
@@ -73,6 +75,10 @@ export class SpriteAtlas {
       this.make((c) => this.fill(c, '#0c2f4a', '#0f496d'))
     );
     this.sprites.set(
+      'ow_water_deep',
+      this.make((c) => this.fill(c, '#071d2e', '#0b2b44'))
+    );
+    this.sprites.set(
       'ow_grass',
       this.make((c) => this.fill(c, '#1f3a24', '#2f5433'))
     );
@@ -83,6 +89,10 @@ export class SpriteAtlas {
     this.sprites.set(
       'ow_mountain',
       this.make((c) => this.patternMountain(c))
+    );
+    this.sprites.set(
+      'ow_mountain_snow',
+      this.make((c) => this.patternMountainSnow(c))
     );
     this.sprites.set(
       'ow_road',
@@ -314,6 +324,24 @@ export class SpriteAtlas {
     ctx.moveTo(2, 13);
     ctx.lineTo(7, 4);
     ctx.lineTo(12, 13);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  private patternMountainSnow(ctx: CanvasRenderingContext2D): void {
+    this.fill(ctx, '#4a515b', '#6b737d');
+    ctx.fillStyle = '#aab2bc';
+    ctx.beginPath();
+    ctx.moveTo(2, 13);
+    ctx.lineTo(7, 4);
+    ctx.lineTo(12, 13);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#e6edf5';
+    ctx.beginPath();
+    ctx.moveTo(5, 10);
+    ctx.lineTo(7, 6);
+    ctx.lineTo(9, 10);
     ctx.closePath();
     ctx.fill();
   }

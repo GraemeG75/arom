@@ -14,7 +14,9 @@ const TERRAIN_PRIMARY_FREQ: number = 36;
 const TERRAIN_SECONDARY_FREQ: number = 12;
 const TERRAIN_SECONDARY_WEIGHT: number = 0.35;
 const WATER_LEVEL: number = 0.28;
+const WATER_DEEP_LEVEL: number = 0.16;
 const MOUNTAIN_LEVEL: number = 0.7;
+const MOUNTAIN_SNOW_LEVEL: number = 0.82;
 const FOREST_PRIMARY_FREQ: number = 18;
 const FOREST_SECONDARY_FREQ: number = 7;
 const FOREST_SECONDARY_WEIGHT: number = 0.45;
@@ -40,7 +42,7 @@ export class Overworld {
     }
 
     // Roads are laid on traversable terrain to speed travel between features.
-    if (tile !== 'water' && tile !== 'mountain') {
+    if (tile !== 'water' && tile !== 'water_deep' && tile !== 'mountain' && tile !== 'mountain_snow') {
       const roadNoise: number = this.sampleNoise(ROAD_SALT, x, y, ROAD_NOISE_FREQ);
       if (Math.abs(roadNoise - 0.5) < ROAD_BAND_WIDTH) {
         tile = 'road';
@@ -48,7 +50,7 @@ export class Overworld {
     }
 
     // Points of interest override base terrain but only spawn on walkable tiles.
-    if (tile !== 'water' && tile !== 'mountain') {
+    if (tile !== 'water' && tile !== 'water_deep' && tile !== 'mountain' && tile !== 'mountain_snow') {
       const poiNoise: number = this.sampleFine(POI_SALT, x, y) % POI_PERIOD;
       if (poiNoise === 1) {
         tile = 'dungeon';
@@ -59,10 +61,10 @@ export class Overworld {
   }
 
   public isWalkable(tile: OverworldTile): boolean {
-    if (tile === 'water') {
+    if (tile === 'water' || tile === 'water_deep') {
       return false;
     }
-    if (tile === 'mountain') {
+    if (tile === 'mountain' || tile === 'mountain_snow') {
       return false;
     }
     if (tile === 'town_wall' || tile === 'town_shop' || tile === 'town_tavern' || tile === 'town_smith' || tile === 'town_house') {
@@ -87,7 +89,7 @@ export class Overworld {
     if (tile === 'forest') {
       return 2.2;
     }
-    if (tile === 'mountain' || tile === 'water') {
+    if (tile === 'mountain' || tile === 'mountain_snow' || tile === 'water' || tile === 'water_deep') {
       return Number.POSITIVE_INFINITY;
     }
     return 1.4;
@@ -99,8 +101,14 @@ export class Overworld {
 
   private baseTerrainAt(x: number, y: number): OverworldTile {
     const terrainValue: number = this.sampleOctave(TERRAIN_SALT, x, y, TERRAIN_PRIMARY_FREQ, TERRAIN_SECONDARY_FREQ, TERRAIN_SECONDARY_WEIGHT);
+    if (terrainValue < WATER_DEEP_LEVEL) {
+      return 'water_deep';
+    }
     if (terrainValue < WATER_LEVEL) {
       return 'water';
+    }
+    if (terrainValue > MOUNTAIN_SNOW_LEVEL) {
+      return 'mountain_snow';
     }
     if (terrainValue > MOUNTAIN_LEVEL) {
       return 'mountain';
@@ -119,7 +127,7 @@ export class Overworld {
           continue;
         }
         const base: OverworldTile = this.baseTerrainAt(cx, cy);
-        if (base === 'water' || base === 'mountain') {
+        if (base === 'water' || base === 'water_deep' || base === 'mountain' || base === 'mountain_snow') {
           continue;
         }
         return { x: cx, y: cy };

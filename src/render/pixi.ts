@@ -250,10 +250,13 @@ export class PixiRenderer {
   }
 
   private renderIsometric(ctx: PixiRenderContext, viewWidth: number, viewHeight: number): void {
+    const pad: number = Math.max(2, Math.ceil(Math.max(viewWidth, viewHeight) / 2));
+    const renderW: number = viewWidth + pad;
+    const renderH: number = viewHeight + pad;
     const originX: number = ctx.player.pos.x;
     const originY: number = ctx.player.pos.y;
-    const halfW: number = Math.floor(viewWidth / 2);
-    const halfH: number = Math.floor(viewHeight / 2);
+    const halfW: number = Math.floor(renderW / 2);
+    const halfH: number = Math.floor(renderH / 2);
     const lightRadius: number = Math.max(halfW, halfH) + 1;
     const now: number = performance.now();
 
@@ -268,8 +271,8 @@ export class PixiRenderer {
 
     const tiles: { wx: number; wy: number; kind: 'overworld' | 'dungeon' | 'town'; tile: string; theme?: DungeonTheme; alpha: number }[] = [];
 
-    for (let row: number = 0; row < viewHeight; row++) {
-      for (let col: number = 0; col < viewWidth; col++) {
+    for (let row: number = 0; row < renderH; row++) {
+      for (let col: number = 0; col < renderW; col++) {
         const x: number = col - halfW;
         const y: number = row - halfH;
         const wx: number = originX + x;
@@ -621,10 +624,14 @@ export class PixiRenderer {
       switch (tile) {
         case 'water':
           return { base: '#0c2f4a', edge: '#0f496d' };
+        case 'water_deep':
+          return { base: '#071d2e', edge: '#0b2b44' };
         case 'forest':
           return { base: '#0e2a1b', edge: '#184a2f' };
         case 'mountain':
           return { base: '#3a3f46', edge: '#555b63' };
+        case 'mountain_snow':
+          return { base: '#b9c2cd', edge: '#dde3ea' };
         case 'road':
           return { base: '#2b251c', edge: '#3a2e21' };
         case 'town_ground':
@@ -694,7 +701,7 @@ export class PixiRenderer {
       return tile === 'wall' ? high : low;
     }
     if (kind === 'overworld') {
-      if (tile === 'mountain' || tile === 'town_wall') {
+      if (tile === 'mountain' || tile === 'mountain_snow' || tile === 'town_wall') {
         return high;
       }
       if (tile === 'water') {
@@ -1162,12 +1169,16 @@ export class PixiRenderer {
     switch (tile) {
       case 'water':
         return 'ow_water';
+      case 'water_deep':
+        return 'ow_water_deep';
       case 'grass':
         return 'ow_grass';
       case 'forest':
         return 'ow_forest';
       case 'mountain':
         return 'ow_mountain';
+      case 'mountain_snow':
+        return 'ow_mountain_snow';
       case 'road':
         return 'ow_road';
       case 'town_ground':

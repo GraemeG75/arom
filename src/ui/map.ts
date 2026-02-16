@@ -56,12 +56,16 @@ function overworldChar(tile: string): string {
   switch (tile) {
     case 'water':
       return '~';
+    case 'water_deep':
+      return '~';
     case 'grass':
       return '.';
     case 'forest':
       return '♣';
     case 'mountain':
       return '^';
+    case 'mountain_snow':
+      return 'A';
     case 'dungeon':
       return 'D';
     case 'town':

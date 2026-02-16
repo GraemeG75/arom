@@ -56,10 +56,10 @@ export function findOverworldPath(overworld: Overworld, from: Point, to: Point, 
     if (tile === 'forest') {
       return 1.4;
     }
-    if (tile === 'mountain') {
+    if (tile === 'mountain' || tile === 'mountain_snow') {
       return 9999;
     }
-    if (tile === 'water') {
+    if (tile === 'water' || tile === 'water_deep') {
       return 9999;
     }
     // towns/dungeons should be reachable, treat like grass

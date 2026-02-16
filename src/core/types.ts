@@ -122,10 +122,12 @@ export type Action =
   | { kind: 'load' };
 
 export type OverworldTile =
+  | 'water_deep'
   | 'water'
   | 'grass'
   | 'forest'
   | 'mountain'
+  | 'mountain_snow'
   | 'dungeon'
   | 'town'
   | 'town_ground'

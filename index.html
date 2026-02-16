@@ -203,6 +203,25 @@
         max-height: 320px;
         overflow: auto;
       }
+      #minimapWrap {
+        margin-top: 10px;
+        border: 1px solid var(--panel-edge);
+        border-radius: 12px;
+        padding: 8px;
+        background: linear-gradient(180deg, #1a130d, #140f0b);
+      }
+      #minimapTitle {
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+      #minimap {
+        display: block;
+        width: 100%;
+        height: auto;
+        border-radius: 8px;
+        image-rendering: pixelated;
+      }
       .hint {
         color: var(--muted);
         font-size: 14px;
@@ -691,6 +710,18 @@
           id="overworldHint">
           Overworld: <b>D</b> dungeons, <b>T</b> towns, <b>=</b> roads. Press <b>M</b> for map + auto-walk (Enter to set destination). Dungeons have
           levels (<b>&gt;</b>/<b>&lt;</b>). Monsters use A* pathing when they can see you.
+        </div>
+
+        <div id="minimapWrap">
+          <div
+            id="minimapTitle"
+            class="small">
+            Map
+          </div>
+          <canvas
+            id="minimap"
+            width="240"
+            height="160"></canvas>
         </div>
 
         <div id="stats"></div>

@@ -27,19 +27,23 @@ export function drawMinimap(ctx: CanvasRenderingContext2D, context: MinimapConte
       ctx.fillStyle =
         t === 'water'
           ? '#0f4d7f'
-          : t === 'grass'
-            ? '#1a5b3c'
-            : t === 'forest'
-              ? '#174a30'
-              : t === 'mountain'
-                ? '#555b63'
-                : t === 'road'
-                  ? '#93a7c8'
-                  : t === 'town' || t.startsWith('town_')
-                    ? '#cfe3ff'
-                    : t === 'dungeon'
-                      ? '#e6d7ff'
-                      : '#1a5b3c';
+          : t === 'water_deep'
+            ? '#0a2b4d'
+            : t === 'grass'
+              ? '#1a5b3c'
+              : t === 'forest'
+                ? '#174a30'
+                : t === 'mountain'
+                  ? '#555b63'
+                  : t === 'mountain_snow'
+                    ? '#d9dfe6'
+                    : t === 'road'
+                      ? '#93a7c8'
+                      : t === 'town' || t.startsWith('town_')
+                        ? '#cfe3ff'
+                        : t === 'dungeon'
+                          ? '#e6d7ff'
+                          : '#1a5b3c';
 
       ctx.fillRect(x + mx * tileSize, y + my * tileSize, tileSize, tileSize);
     }

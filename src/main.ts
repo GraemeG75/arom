@@ -20,7 +20,6 @@ import { PixiRenderer } from './render/pixi';
 import { MessageLog } from './ui/log';
 import { loadFromBase62String, loadFromLocalStorage, saveToLocalStorage, serializeSaveDataBase62, type SaveDataV3 } from './core/save';
 import { renderPanelHtml, type PanelMode } from './ui/panel';
-import { renderOverworldMapAscii } from './ui/map';
 import { aStar } from './systems/astar';
 import { hash2D } from './core/hash';
 import { t } from './i18n';
@@ -713,8 +712,18 @@ const btnMap: HTMLButtonElement = document.getElementById('btnMap') as HTMLButto
 
 const canvas: HTMLCanvasElement = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const canvasRenderer: PixiRenderer = new PixiRenderer(canvas);
-const PIXI_VIEW_W: number = Math.max(1, Math.floor(canvas.width / 16) - 1);
-const PIXI_VIEW_H: number = Math.max(1, Math.floor(canvas.height / 16) - 1);
+const minimapWrap: HTMLElement = document.getElementById('minimapWrap')!;
+const minimapCanvas: HTMLCanvasElement = document.getElementById('minimap') as HTMLCanvasElement;
+const minimapCtx: CanvasRenderingContext2D | null = minimapCanvas.getContext('2d');
+
+function getPixiViewSize(): { w: number; h: number } {
+  const tileSize: number = 16;
+  const widthPx: number = Math.max(1, Math.floor(canvas.width));
+  const heightPx: number = Math.max(1, Math.floor(canvas.height));
+  const w: number = Math.max(1, Math.floor(widthPx / tileSize));
+  const h: number = Math.max(1, Math.floor(heightPx / tileSize));
+  return { w, h };
+}
 
 const classModal: HTMLElement = document.getElementById('classSelect')!;
 const classSelectTitle: HTMLElement = document.getElementById('classSelectTitle')!;
@@ -1812,18 +1821,8 @@ function handleAction(action: Action): void {
   }
 
   if (action.kind === 'toggleMap') {
-    if (state.mode !== 'overworld') {
-      state.log.push(t('log.map.overworldOnly'));
-      render();
-      return;
-    }
-
     state.mapOpen = !state.mapOpen;
-    state.activePanel = 'none';
-    state.mapCursor = { x: 0, y: 0 };
-    if (state.mapOpen) {
-      state.log.push(t('log.map.open'));
-    }
+    state.log.push(state.mapOpen ? t('log.map.open') : t('log.map.closed'));
     render();
     return;
   }
@@ -2653,6 +2652,8 @@ function render(): void {
     </div>
   `;
 
+  renderMinimap();
+
   statsEl.innerHTML = `
     <div class="kv"><div><b>${escapeHtml(state.player.name)}</b> <span class="muted">${escapeHtml(
       t('ui.stats.level', { level: state.player.level })
@@ -2703,29 +2704,9 @@ function render(): void {
     .map((m) => `<div>• ${escapeHtml(m.text)}</div>`)
     .join('');
 
-  if (state.mapOpen) {
-    // Map overlay: render a larger overworld view in ASCII, with destination/path markers.
-    asciiEl.style.display = 'block';
-    canvasWrap.style.display = 'none';
-
-    const dest: Point | undefined = state.destination ?? { x: state.player.pos.x + state.mapCursor.x, y: state.player.pos.y + state.mapCursor.y };
-    asciiEl.textContent = renderOverworldMapAscii(
-      {
-        overworld: state.overworld,
-        player: state.player,
-        destination: dest,
-        autoPath: state.autoPath,
-        items: state.items
-      },
-      89,
-      41
-    );
-
-    return;
-  }
-
   asciiEl.style.display = 'none';
   canvasWrap.style.display = 'block';
+  const view = getPixiViewSize();
   canvasRenderer.render(
     {
       mode: state.mode,
@@ -2737,10 +2718,90 @@ function render(): void {
       items: state.items,
       useFov: state.useFov
     },
-    PIXI_VIEW_W,
-    PIXI_VIEW_H,
+    view.w,
+    view.h,
     state.rendererMode === 'isometric' ? 'isometric' : 'canvas'
   );
+}
+
+function renderMinimap(): void {
+  if (!minimapCtx) {
+    return;
+  }
+
+  minimapWrap.classList.toggle('displayNone', !state.mapOpen);
+  if (!state.mapOpen) {
+    return;
+  }
+
+  const ctx = minimapCtx;
+  const tileSize: number = 4;
+  const viewW: number = Math.floor(minimapCanvas.width / tileSize);
+  const viewH: number = Math.floor(minimapCanvas.height / tileSize);
+  const halfW: number = Math.floor(viewW / 2);
+  const halfH: number = Math.floor(viewH / 2);
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#140f0b';
+  ctx.fillRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+
+  if (state.mode !== 'overworld') {
+    ctx.fillStyle = '#c7b79b';
+    ctx.font = '14px Georgia, Times New Roman, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(t('ui.map.unavailable'), minimapCanvas.width / 2, minimapCanvas.height / 2);
+    return;
+  }
+
+  for (let y: number = -halfH; y <= halfH; y += 1) {
+    for (let x: number = -halfW; x <= halfW; x += 1) {
+      const wx: number = state.player.pos.x + x;
+      const wy: number = state.player.pos.y + y;
+      const tile = state.overworld.getTile(wx, wy);
+      ctx.fillStyle = minimapColor(tile);
+      ctx.fillRect((x + halfW) * tileSize, (y + halfH) * tileSize, tileSize, tileSize);
+    }
+  }
+
+  ctx.fillStyle = '#f3e8d3';
+  ctx.fillRect(halfW * tileSize, halfH * tileSize, tileSize, tileSize);
+}
+
+function minimapColor(tile: string): string {
+  switch (tile) {
+    case 'water':
+      return '#2b4b6b';
+    case 'water_deep':
+      return '#0a2b4d';
+    case 'forest':
+      return '#1f3b2b';
+    case 'grass':
+      return '#2f5a34';
+    case 'mountain':
+      return '#5a4a3b';
+    case 'mountain_snow':
+      return '#d9dfe6';
+    case 'road':
+      return '#8a6b44';
+    case 'dungeon':
+      return '#9b4a3a';
+    case 'town':
+    case 'town_square':
+      return '#d7b46a';
+    case 'town_road':
+      return '#b58d57';
+    case 'town_gate':
+      return '#c6a069';
+    case 'town_wall':
+      return '#7a6750';
+    case 'town_shop':
+    case 'town_tavern':
+    case 'town_smith':
+    case 'town_house':
+      return '#c9a06b';
+    default:
+      return '#2a241b';
+  }
 }
 
 // Panel actions (inventory/shop buttons)
@@ -3099,44 +3160,6 @@ function keyToAction(e: KeyboardEvent): Action | undefined {
   return undefined;
 }
 
-function handleMapKey(e: KeyboardEvent): void {
-  // Cursor is relative to player.
-  if (e.key === 'Escape' || e.key === 'm' || e.key === 'M') {
-    state.mapOpen = false;
-    render();
-    return;
-  }
-
-  const step: number = e.shiftKey ? 5 : 1;
-
-  if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
-    state.mapCursor.y -= step;
-  }
-  if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
-    state.mapCursor.y += step;
-  }
-  if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-    state.mapCursor.x -= step;
-  }
-  if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-    state.mapCursor.x += step;
-  }
-
-  if (e.key === 'c' || e.key === 'C') {
-    state.destination = undefined;
-    state.autoPath = undefined;
-    state.log.push(t('log.autoWalk.cancel'));
-  }
-
-  if (e.key === 'Enter') {
-    const dest = { x: state.player.pos.x + state.mapCursor.x, y: state.player.pos.y + state.mapCursor.y };
-    setDestination(dest);
-    state.mapOpen = false;
-  }
-
-  render();
-}
-
 window.addEventListener('keydown', (e: KeyboardEvent) => {
   if (isClassModalVisible()) {
     if (e.key === 'o' || e.key === 'O') {
@@ -3147,12 +3170,6 @@ window.addEventListener('keydown', (e: KeyboardEvent) => {
     }
     return;
   }
-  if (state.mapOpen) {
-    e.preventDefault();
-    handleMapKey(e);
-    return;
-  }
-
   const a: Action | undefined = keyToAction(e);
   if (!a) {
     return;
@@ -3368,7 +3385,7 @@ function applyLoadedSave(data: SaveDataV3): boolean {
     shopCategory: 'all',
     turnCounter: data.turnCounter ?? 0,
     quests: data.quests ?? [],
-    mapOpen: false,
+    mapOpen: true,
     mapCursor: { x: 0, y: 0 },
     destination: undefined,
     autoPath: undefined,

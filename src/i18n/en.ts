@@ -1,7 +1,7 @@
 export const en: Record<string, string> = {
   'app.title': 'Ancient Realms of Mystery',
   'ui.hint.controls':
-    'Move WASD/Arrows • Shift+Move run • M map • Enter use • I inventory • B shop • Q quests • H story • G pick up • R renderer • F FOV • P save • O load',
+    'Move WASD/Arrows • Shift+Move run • M minimap • Enter use • I inventory • B shop • Q quests • H story • G pick up • R renderer • F FOV • P save • O load',
   'ui.buttons.canvas': 'Canvas',
   'ui.buttons.ascii': 'ASCII',
   'ui.buttons.newSeed': 'New Seed',
@@ -42,7 +42,8 @@ export const en: Record<string, string> = {
   'ui.support.linkText': 'Buy me a coffee',
   'ui.support.tail': 'to keep it going.',
   'ui.overworld.hint':
-    'Overworld: {dungeonKey} dungeons, {townKey} towns, {roadKey} roads. Press {mapKey} for map + auto-walk ({enterKey} to set destination). Dungeons have levels ({downKey}/{upKey}). Monsters use A* pathing when they can see you.',
+    'Overworld: {dungeonKey} dungeons, {townKey} towns, {roadKey} roads. Press {mapKey} to toggle the minimap. Dungeons have levels ({downKey}/{upKey}). Monsters use A* pathing when they can see you.',
+  'ui.map.unavailable': 'Map unavailable here',
   'ui.classSelect.title': 'Select Your Adventurer',
   'ui.classSelect.subtitle': 'Each hero fights differently. Pick the style that suits you.',
   'ui.classSelect.load': 'Load Saved Game',
@@ -191,7 +192,9 @@ export const en: Record<string, string> = {
   'log.fov.off': 'FOV disabled.',
   'log.shop.find': 'Find the shop building to trade.',
   'log.map.overworldOnly': 'Map is only available on the overworld.',
-  'log.map.open': 'Map open: move cursor with WASD/Arrows, Enter to set destination, Esc/M to close, C to cancel auto-walk.',
+  'log.map.disabled': 'Map view is currently disabled.',
+  'log.map.open': 'Minimap shown.',
+  'log.map.closed': 'Minimap hidden.',
   'log.autoWalk.cancel': 'Auto-walk canceled.',
   'log.quest.find': 'Visit the tavern to check bounties.',
   'log.help':
