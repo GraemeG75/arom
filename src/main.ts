@@ -46,6 +46,7 @@ import { MessageLog } from './ui/log';
 import { loadFromBase62String, loadFromLocalStorage, saveToLocalStorage, serializeSaveDataBase62, type SaveDataV3 } from './core/save';
 import { renderPanelHtml } from './ui/panel';
 import { hash2D } from './core/hash';
+import { AMBUSH_CHANCE, BOSS_MIN_DEPTH, COMBAT, LEVEL_XP_BASE, LEVEL_XP_PER_LEVEL, MONSTER_SPAWN, SHOP_RESTOCK_INTERVAL } from './core/const';
 import { t } from './i18n';
 
 type RendererMode = PixiRenderMode;
@@ -353,8 +354,6 @@ const RARITY_CONFIG_BY_KEY: Record<GearRarity, RarityConfig> = RARITY_CONFIGS.re
   },
   {} as Record<GearRarity, RarityConfig>
 );
-
-const SHOP_RESTOCK_INTERVAL: number = 80;
 
 /**
  * Computes the shop economy for the current restock cycle.
@@ -1345,8 +1344,6 @@ function ensureTownInterior(s: GameState, townCenter: Point): Town {
   return town;
 }
 
-const BOSS_MIN_DEPTH: number = 3;
-
 /**
  * Spawns a batch of monsters into a dungeon.
  * @param s The game state.
@@ -1354,7 +1351,7 @@ const BOSS_MIN_DEPTH: number = 3;
  * @param seed The RNG seed.
  */
 function spawnMonstersInDungeon(s: GameState, dungeon: Dungeon, seed: number): void {
-  const monsterCount: number = 7 + Math.min(14, dungeon.depth * 2);
+  const monsterCount: number = MONSTER_SPAWN.baseCount + Math.min(MONSTER_SPAWN.depthCap, dungeon.depth * MONSTER_SPAWN.depthMultiplier);
   const rng: Rng = new Rng(seed ^ 0xbeef);
   const playerLevel: number = s.player.level;
 
@@ -1370,7 +1367,10 @@ function spawnMonstersInDungeon(s: GameState, dungeon: Dungeon, seed: number): v
 
 function spawnAmbushMonsters(s: GameState, dungeon: Dungeon, seed: number, playerLevel: number): void {
   const rng: Rng = new Rng(seed ^ 0xa51d);
-  const desired: number = Math.max(3, Math.min(7, 3 + Math.floor(playerLevel / 2)));
+  const desired: number = Math.max(
+    MONSTER_SPAWN.ambushMin,
+    Math.min(MONSTER_SPAWN.ambushMax, MONSTER_SPAWN.ambushBase + Math.floor(playerLevel / MONSTER_SPAWN.ambushLevelDiv))
+  );
   const depth: number = Math.max(1, Math.floor((playerLevel + 1) / 2));
   const used: Set<string> = new Set<string>();
 
@@ -2871,16 +2871,16 @@ class CombatEngine {
   public getHitChance(attacker: Entity): number {
     if (attacker.kind === EntityKind.Player) {
       const agi: number = attacker.agility ?? 0;
-      const base: number = 70 + agi * 3 + Math.floor(attacker.level / 2);
-      return Math.max(25, Math.min(95, base));
+      const base: number = COMBAT.hit.playerBase + agi * COMBAT.hit.playerAgiMult + Math.floor(attacker.level / COMBAT.hit.playerLevelDiv);
+      return Math.max(COMBAT.hit.playerMin, Math.min(COMBAT.hit.playerMax, base));
     }
 
-    const base: number = 60 + attacker.level * 3;
-    return Math.max(25, Math.min(90, base));
+    const base: number = COMBAT.hit.monsterBase + attacker.level * COMBAT.hit.monsterLevelMult;
+    return Math.max(COMBAT.hit.monsterMin, Math.min(COMBAT.hit.monsterMax, base));
   }
 
   public xpToNextLevel(level: number): number {
-    return 25 + (level - 1) * 12;
+    return LEVEL_XP_BASE + (level - 1) * LEVEL_XP_PER_LEVEL;
   }
 
   public awardXp(amount: number): void {
@@ -2918,7 +2918,7 @@ class CombatEngine {
 
     // Player takes more damage from monsters
     if (defender.kind === EntityKind.Player && attacker.kind === EntityKind.Monster) {
-      def = Math.floor(def * 0.9);
+      def = Math.floor(def * COMBAT.damage.playerDefMultiplier);
     }
 
     let damageMultiplier: number = 1;
@@ -2939,7 +2939,7 @@ class CombatEngine {
     }
 
     if (defender.kind === EntityKind.Player) {
-      const dodgeChance: number = Math.min(50, this.getEquippedDodgeChance(defender));
+      const dodgeChance: number = Math.min(COMBAT.dodgeCap, this.getEquippedDodgeChance(defender));
       if (dodgeChance > 0 && state.rng.nextInt(0, 100) < dodgeChance) {
         state.log.push(t('log.combat.dodge'));
         return;
@@ -2960,7 +2960,7 @@ class CombatEngine {
         case 'rogue': {
           const agility: number = attacker.agility ?? 0;
           atk += Math.floor(agility / 2);
-          critChance = Math.min(60, 10 + agility * 4);
+          critChance = Math.min(COMBAT.crit.rogueCap, COMBAT.crit.rogueBase + agility * COMBAT.crit.rogueAgiMult);
           playerVerb = t('combat.verb.stab');
           break;
         }
@@ -2968,7 +2968,7 @@ class CombatEngine {
         default: {
           const intellect: number = attacker.intellect ?? 0;
           atk += Math.floor(intellect / 2);
-          def = Math.floor(def * 0.5);
+          def = Math.floor(def * COMBAT.damage.mageDefMultiplier);
           if (def < originalDef) {
             suffixParts.push(t('combat.suffix.armorMelts'));
           }
@@ -2977,9 +2977,9 @@ class CombatEngine {
         }
       }
 
-      critChance = Math.min(75, critChance + this.getEquippedCritChance(attacker));
+      critChance = Math.min(COMBAT.crit.totalCap, critChance + this.getEquippedCritChance(attacker));
       if (critChance > 0 && state.rng.nextInt(0, 100) < critChance) {
-        damageMultiplier = 2;
+        damageMultiplier = COMBAT.crit.damageMult;
         if (playerVerb === t('combat.verb.stab')) {
           playerVerb = t('combat.verb.backstab');
         }
@@ -2987,14 +2987,14 @@ class CombatEngine {
       }
     }
 
-    const roll: number = state.rng.nextInt(0, 6);
+    const roll: number = state.rng.nextInt(0, COMBAT.damage.rollMaxExclusive);
     const raw: number = atk + roll;
     let dmg: number = Math.max(1, raw - def);
     dmg = Math.max(1, Math.floor(dmg * damageMultiplier));
 
     // Monsters deal bonus damage against player
     if (defender.kind === EntityKind.Player && attacker.kind === EntityKind.Monster) {
-      dmg = Math.floor(dmg * 1.15);
+      dmg = Math.floor(dmg * COMBAT.damage.monsterDamageMultiplier);
     }
 
     defender.hp -= dmg;
@@ -3004,7 +3004,7 @@ class CombatEngine {
     }
 
     if (attacker.kind === EntityKind.Player) {
-      const lifesteal: number = Math.min(50, this.getEquippedLifesteal(attacker));
+      const lifesteal: number = Math.min(COMBAT.lifestealCap, this.getEquippedLifesteal(attacker));
       if (lifesteal > 0) {
         const heal: number = Math.min(attacker.maxHp - attacker.hp, Math.floor((dmg * lifesteal) / 100));
         if (heal > 0) {
@@ -3015,7 +3015,7 @@ class CombatEngine {
     }
 
     if (defender.kind === EntityKind.Player && attacker.kind === EntityKind.Monster) {
-      const thorns: number = Math.min(20, this.getEquippedThorns(defender));
+      const thorns: number = Math.min(COMBAT.thornsCap, this.getEquippedThorns(defender));
       if (thorns > 0) {
         attacker.hp -= thorns;
         state.log.push(t('log.combat.thorns', { name: attacker.name, amount: thorns }));
@@ -3097,13 +3097,13 @@ class CombatEngine {
     }
     const def: number = defender.baseDefense + this.getEquippedDefenseBonus(defender);
     const base: number = 2 + Math.floor(attacker.baseAttack / 2) + state.rng.nextInt(0, 3);
-    const dmg: number = Math.max(1, base - Math.floor(def * 0.3));
+    const dmg: number = Math.max(1, base - Math.floor(def * COMBAT.wraithDefMultiplier));
     defender.hp -= dmg;
     if (defender.hp < 0) {
       defender.hp = 0;
     }
 
-    const heal: number = Math.min(attacker.maxHp - attacker.hp, Math.floor(dmg * 0.6));
+    const heal: number = Math.min(attacker.maxHp - attacker.hp, Math.floor(dmg * COMBAT.wraithHealRatio));
     if (heal > 0) {
       attacker.hp += heal;
     }
@@ -3358,15 +3358,15 @@ function maybeTriggerAmbush(tile: OverworldTile): boolean {
 
   let chance: number = 0;
   if (tile === OverworldTile.Forest) {
-    chance = 6;
+    chance = AMBUSH_CHANCE.forest;
   } else if (tile === OverworldTile.Grass) {
-    chance = 3;
+    chance = AMBUSH_CHANCE.grass;
   } else if (tile === OverworldTile.Road) {
-    chance = 1;
+    chance = AMBUSH_CHANCE.road;
   } else if (tile === OverworldTile.Cave || tile === OverworldTile.Dungeon) {
-    chance = 0;
+    chance = AMBUSH_CHANCE.cave;
   } else {
-    chance = 2;
+    chance = AMBUSH_CHANCE.default;
   }
 
   if (chance <= 0) {
@@ -3608,7 +3608,7 @@ function render(): void {
   const atk: number = state.player.baseAttack + combat.getEquippedAttackBonus(state.player);
   const def: number = state.player.baseDefense + combat.getEquippedDefenseBonus(state.player);
   const hitChance: number = combat.getHitChance(state.player);
-  const dodgeChance: number = Math.min(50, combat.getEquippedDodgeChance(state.player));
+  const dodgeChance: number = Math.min(COMBAT.dodgeCap, combat.getEquippedDodgeChance(state.player));
   const str: number = state.player.strength ?? 0;
   const agi: number = state.player.agility ?? 0;
   const intl: number = state.player.intellect ?? 0;
