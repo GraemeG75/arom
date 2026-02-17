@@ -10,7 +10,7 @@ import { SpriteAtlas, type SpriteKey } from './sprites';
 import { t } from '../i18n';
 
 type PixiRenderContext = {
-  mode: Mode;
+  mode: IsoMode;
   overworld: Overworld;
   dungeon: Dungeon | undefined;
   town: Town | undefined;
@@ -319,7 +319,7 @@ export class PixiRenderer {
     this.entityLayer.removeChildren();
     this.overlayLayer.removeChildren();
 
-    const tiles: { wx: number; wy: number; kind: Mode; tile: OverworldTile | DungeonTile | TownTile; theme?: DungeonTheme; alpha: number }[] = [];
+    const tiles: { wx: number; wy: number; kind: IsoMode; tile: OverworldTile | DungeonTile | TownTile; theme?: DungeonTheme; alpha: number }[] = [];
 
     for (let row: number = 0; row < renderH; row++) {
       for (let col: number = 0; col < renderW; col++) {

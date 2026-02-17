@@ -2868,6 +2868,17 @@ class CombatEngine {
     return this.getEquippedArmorItem(entity)?.thorns ?? 0;
   }
 
+  public getHitChance(attacker: Entity): number {
+    if (attacker.kind === EntityKind.Player) {
+      const agi: number = attacker.agility ?? 0;
+      const base: number = 70 + agi * 3 + Math.floor(attacker.level / 2);
+      return Math.max(25, Math.min(95, base));
+    }
+
+    const base: number = 60 + attacker.level * 3;
+    return Math.max(25, Math.min(90, base));
+  }
+
   public xpToNextLevel(level: number): number {
     return 25 + (level - 1) * 12;
   }
@@ -2907,13 +2918,25 @@ class CombatEngine {
 
     // Player takes more damage from monsters
     if (defender.kind === EntityKind.Player && attacker.kind === EntityKind.Monster) {
-      def = Math.floor(def * 0.75);
+      def = Math.floor(def * 0.9);
     }
 
     let damageMultiplier: number = 1;
     const suffixParts: string[] = [];
     let playerVerb: string = t('combat.verb.hit');
     let critChance: number = 0;
+
+    const hitChance: number = this.getHitChance(attacker);
+    if (state.rng.nextInt(0, 100) >= hitChance) {
+      if (attacker.kind === EntityKind.Player) {
+        state.log.push(t('log.combat.miss', { target: defender.name }));
+      } else if (defender.kind === EntityKind.Player) {
+        state.log.push(t('log.combat.enemyMiss', { name: attacker.name }));
+      } else {
+        state.log.push(t('log.combat.monsterMiss', { attacker: attacker.name, defender: defender.name }));
+      }
+      return;
+    }
 
     if (defender.kind === EntityKind.Player) {
       const dodgeChance: number = Math.min(50, this.getEquippedDodgeChance(defender));
@@ -3063,6 +3086,15 @@ class CombatEngine {
 
   public wraithDrain(attacker: Entity, defender: Entity): void {
     const state: GameState = this.state;
+    const hitChance: number = this.getHitChance(attacker);
+    if (state.rng.nextInt(0, 100) >= hitChance) {
+      if (defender.kind === EntityKind.Player) {
+        state.log.push(t('log.combat.enemyMiss', { name: attacker.name }));
+      } else {
+        state.log.push(t('log.combat.monsterMiss', { attacker: attacker.name, defender: defender.name }));
+      }
+      return;
+    }
     const def: number = defender.baseDefense + this.getEquippedDefenseBonus(defender);
     const base: number = 2 + Math.floor(attacker.baseAttack / 2) + state.rng.nextInt(0, 3);
     const dmg: number = Math.max(1, base - Math.floor(def * 0.3));
@@ -3575,6 +3607,8 @@ function render(): void {
   const classInfo: ClassConfig = CLASS_CONFIG[state.playerClass];
   const atk: number = state.player.baseAttack + combat.getEquippedAttackBonus(state.player);
   const def: number = state.player.baseDefense + combat.getEquippedDefenseBonus(state.player);
+  const hitChance: number = combat.getHitChance(state.player);
+  const dodgeChance: number = Math.min(50, combat.getEquippedDodgeChance(state.player));
   const str: number = state.player.strength ?? 0;
   const agi: number = state.player.agility ?? 0;
   const intl: number = state.player.intellect ?? 0;
@@ -3613,6 +3647,7 @@ function render(): void {
       t('ui.stats.statsLine', { str, agi, int: intl })
     )}</div></div>
     <div class="kv small"><div>${escapeHtml(t('ui.stats.atk', { atk }))}</div><div>${escapeHtml(t('ui.stats.def', { def }))}</div></div>
+    <div class="kv small"><div>${escapeHtml(t('ui.stats.hit', { hit: hitChance }))}</div><div>${escapeHtml(t('ui.stats.dodge', { dodge: dodgeChance }))}</div></div>
     <div class="kv small"><div>${escapeHtml(t('ui.stats.xp', { xp: state.player.xp, next: nextXp }))}</div><div>${escapeHtml(
       t('ui.stats.gold', { gold: state.player.gold })
     )}</div></div>
