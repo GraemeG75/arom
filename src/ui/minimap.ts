@@ -8,6 +8,15 @@ export type MinimapContext = {
   discoveredPois: { kind: 'town' | 'dungeon' | 'cave'; pos: Point }[];
 };
 
+/**
+ * Draws the minimap onto a canvas context.
+ * @param ctx The canvas context.
+ * @param context The minimap context.
+ * @param x The top-left x pixel.
+ * @param y The top-left y pixel.
+ * @param tiles The number of tiles to render.
+ * @param tileSize The tile size in pixels.
+ */
 export function drawMinimap(ctx: CanvasRenderingContext2D, context: MinimapContext, x: number, y: number, tiles: number, tileSize: number): void {
   // Draw a simple minimap box (opaque background)
   ctx.save();

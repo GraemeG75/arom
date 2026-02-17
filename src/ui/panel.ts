@@ -18,6 +18,11 @@ export type PanelContext = {
   shopSellPrices?: Record<string, number>;
 };
 
+/**
+ * Renders the side panel based on the current mode.
+ * @param ctx The panel context.
+ * @returns The HTML string.
+ */
 export function renderPanelHtml(ctx: PanelContext): string {
   if (ctx.mode === 'inventory') {
     return renderInventory(ctx.player, ctx.items);
@@ -38,12 +43,22 @@ export function renderPanelHtml(ctx: PanelContext): string {
   return `<div class="small muted">${t('panel.default', { inv: invTag, shop: shopTag, quest: questTag, story: storyTag })}</div>`;
 }
 
+/**
+ * Renders a rarity badge for an item.
+ * @param item The item.
+ * @returns The HTML string.
+ */
 function renderRarityBadge(item: Item): string {
   const rarity: GearRarity = item.rarity ?? 'common';
   const label: string = t(`rarity.${rarity}.label`);
   return `<span class="rarityBadge rarity-${rarity}">${escapeHtml(label)}</span>`;
 }
 
+/**
+ * Formats the extra stat info for an item.
+ * @param it The item.
+ * @returns The formatted string.
+ */
 function formatItemExtra(it: Item): string {
   if (it.kind === 'potion') {
     return t('panel.item.extra.potion', { amount: it.healAmount ?? 0 });
@@ -72,6 +87,12 @@ function formatItemExtra(it: Item): string {
   return parts.length > 0 ? `(${parts.join(', ')})` : '';
 }
 
+/**
+ * Renders the inventory panel.
+ * @param player The player entity.
+ * @param items The item list.
+ * @returns The HTML string.
+ */
 function renderInventory(player: Entity, items: Item[]): string {
   const invItems: Item[] = player.inventory.map((id: string) => items.find((x) => x.id === id)).filter((x: Item | undefined): x is Item => !!x);
 
@@ -151,6 +172,18 @@ function renderInventory(player: Entity, items: Item[]): string {
   return lines.join('');
 }
 
+/**
+ * Renders the shop panel.
+ * @param player The player entity.
+ * @param items The item list.
+ * @param shop The active shop.
+ * @param canShop Whether the player can shop.
+ * @param category The active shop category.
+ * @param economy The shop economy info.
+ * @param buyPrices The computed buy prices.
+ * @param sellPrices The computed sell prices.
+ * @returns The HTML string.
+ */
 function renderShop(
   player: Entity,
   items: Item[],
@@ -266,6 +299,13 @@ function renderShop(
   return lines.join('');
 }
 
+/**
+ * Renders the quest log panel.
+ * @param quests The available quests.
+ * @param activeTownId The active town id.
+ * @param items The item list.
+ * @returns The HTML string.
+ */
 function renderQuestLog(quests: import('../core/types').Quest[], activeTownId: string | undefined, items: Item[]): string {
   const lines: string[] = [];
   lines.push(
@@ -340,6 +380,12 @@ function renderQuestLog(quests: import('../core/types').Quest[], activeTownId: s
   return lines.join('');
 }
 
+/**
+ * Renders the story panel.
+ * @param story The character story.
+ * @param player The player entity.
+ * @returns The HTML string.
+ */
 function renderStory(story: CharacterStory, player: Entity): string {
   const lines: string[] = [];
   lines.push(
@@ -368,6 +414,11 @@ function renderStory(story: CharacterStory, player: Entity): string {
   return lines.join('');
 }
 
+/**
+ * Escapes HTML entities in a string.
+ * @param s The input string.
+ * @returns The escaped string.
+ */
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

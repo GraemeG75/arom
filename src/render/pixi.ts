@@ -21,6 +21,9 @@ type PixiRenderContext = {
 
 type PixiRenderMode = 'canvas' | 'isometric';
 
+/**
+ * Renderer implementation using Pixi.js. Uses a single sprite sheet for all tiles and entities, with dynamic texture generation for things like lighting and isometric rendering.
+ */
 export class PixiRenderer {
   private readonly app: Application;
   private readonly atlas: SpriteAtlas;
@@ -62,6 +65,10 @@ export class PixiRenderer {
   private initialized: boolean;
   private pendingRender?: { ctx: PixiRenderContext; viewWidth: number; viewHeight: number; renderMode: PixiRenderMode };
 
+  /**
+   * Creates a new PixiRenderer instance.
+   * @param canvas The HTML canvas element to render on.
+   */
   public constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.tileSize = 16;
@@ -125,6 +132,14 @@ export class PixiRenderer {
       });
   }
 
+  /**
+   * Renders the game scene using Pixi.js.
+   * @param ctx The rendering context containing game state.
+   * @param viewWidth The width of the view in tiles.
+   * @param viewHeight The height of the view in tiles.
+   * @param renderMode The rendering mode, either 'canvas' or 'isometric'.
+   * @returns void
+   */
   public render(ctx: PixiRenderContext, viewWidth: number, viewHeight: number, renderMode: PixiRenderMode = 'canvas'): void {
     if (!this.initialized) {
       this.pendingRender = { ctx, viewWidth, viewHeight, renderMode };
@@ -261,6 +276,12 @@ export class PixiRenderer {
     this.app.render();
   }
 
+  /**
+   * Renders the game scene in isometric view using Pixi.js.
+   * @param ctx The rendering context containing game state.
+   * @param viewWidth The width of the view in tiles.
+   * @param viewHeight The height of the view in tiles.
+   */
   private renderIsometric(ctx: PixiRenderContext, viewWidth: number, viewHeight: number): void {
     const isoTileW: number = this.tileSize * 2;
     const isoTileH: number = this.tileSize;
@@ -506,6 +527,12 @@ export class PixiRenderer {
     this.app.render();
   }
 
+  /**
+   * Creates a texture for highlighting isometric tiles.
+   * @param isoTileW The width of the isometric tile.
+   * @param isoTileH The height of the isometric tile.
+   * @returns The generated texture.
+   */
   private getIsoHighlightTexture(isoTileW: number, isoTileH: number): Texture {
     const cacheKey: string = `iso_highlight_${isoTileW}x${isoTileH}`;
     const cached: Texture | undefined = this.textures.get(cacheKey);
@@ -542,6 +569,12 @@ export class PixiRenderer {
     return texture;
   }
 
+  /**
+   * Creates a texture for the dungeon glow effect in isometric view.
+   * @param isoTileW The width of the isometric tile.
+   * @param isoTileH The height of the isometric tile.
+   * @returns The generated texture.
+   */
   private getIsoDungeonGlowTexture(isoTileW: number, isoTileH: number): Texture {
     const cacheKey: string = `iso_dungeon_glow_${isoTileW}x${isoTileH}`;
     const cached: Texture | undefined = this.textures.get(cacheKey);
@@ -583,6 +616,14 @@ export class PixiRenderer {
     return texture;
   }
 
+  /**
+   * Calculates the height of an isometric tile at a given world position.
+   * @param ctx The rendering context containing game state.
+   * @param wx The world x-coordinate of the tile.
+   * @param wy The world y-coordinate of the tile.
+   * @param isoTileH The height of the isometric tile.
+   * @returns The height of the isometric tile at the given position.
+   */
   private isoTileHeightAt(ctx: PixiRenderContext, wx: number, wy: number, isoTileH: number): number {
     if (ctx.mode === 'overworld') {
       const tile: string = ctx.overworld.getTile(wx, wy);
@@ -610,6 +651,16 @@ export class PixiRenderer {
     return this.isoTileHeight('town', tile, isoTileH);
   }
 
+  /**
+   * Creates a texture for an isometric tile.
+   * @param kind The type of the tile ('overworld', 'dungeon', or 'town').
+   * @param tile The tile identifier.
+   * @param theme The theme of the dungeon, if applicable.
+   * @param isoTileW The width of the isometric tile.
+   * @param isoTileH The height of the isometric tile.
+   * @param tileHeight The height of the tile in pixels.
+   * @returns The generated texture.
+   */
   private getIsoTileTexture(
     kind: 'overworld' | 'dungeon' | 'town',
     tile: string,
@@ -680,6 +731,15 @@ export class PixiRenderer {
     return texture;
   }
 
+  /**
+   * Applies detailed textures to an isometric tile.
+   * @param ctx The canvas rendering context.
+   * @param kind The type of the tile ('overworld', 'dungeon', or 'town').
+   * @param tile The tile identifier.
+   * @param isoTileW The width of the isometric tile.
+   * @param isoTileH The height of the isometric tile.
+   * @returns
+   */
   private applyIsoTileDetail(
     ctx: CanvasRenderingContext2D,
     kind: 'overworld' | 'dungeon' | 'town',
@@ -770,6 +830,13 @@ export class PixiRenderer {
     ctx.restore();
   }
 
+  /**
+   * Determines the colors for an isometric tile based on its type and theme.
+   * @param kind The type of the tile ('overworld', 'dungeon', or 'town').
+   * @param tile The tile identifier.
+   * @param theme The theme of the dungeon, if applicable.
+   * @returns An object containing the base and edge colors for the tile.
+   */
   private isoTileColors(kind: 'overworld' | 'dungeon' | 'town', tile: string, theme: DungeonTheme | undefined): { base: string; edge: string } {
     if (kind === 'overworld') {
       switch (tile) {
@@ -843,6 +910,13 @@ export class PixiRenderer {
     }
   }
 
+  /**
+   * Calculates the height of an isometric tile at a given world position.
+   * @param kind The type of the tile ('overworld', 'dungeon', or 'town').
+   * @param tile The tile identifier.
+   * @param isoTileH The height of the isometric tile.
+   * @returns The height of the isometric tile at the given position.
+   */
   private isoTileHeight(kind: 'overworld' | 'dungeon' | 'town', tile: string, isoTileH: number): number {
     const low: number = Math.max(2, Math.floor(isoTileH * 0.2));
     const high: number = Math.max(5, Math.floor(isoTileH * 0.8));
@@ -865,6 +939,12 @@ export class PixiRenderer {
     return low;
   }
 
+  /**
+   * Darkens a hex color by a given amount.
+   * @param color The hex color to darken.
+   * @param amount The amount to darken the color (0 to 1).
+   * @returns The darkened hex color.
+   */
   private darkenHex(color: string, amount: number): string {
     const raw: string = color.startsWith('#') ? color.slice(1) : color;
     if (raw.length !== 6) {
@@ -880,10 +960,19 @@ export class PixiRenderer {
     return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
   }
 
+  /**
+   * Triggers the level up effect.
+   */
   public triggerLevelUpEffect(): void {
     this.triggerBannerEffect(t('ui.fx.levelUp'));
   }
 
+  /**
+   * Triggers a banner effect with a given label and duration.
+   * @param label The text to display on the banner.
+   * @param durationMs The duration of the banner effect in milliseconds.
+   * @returns void
+   */
   public triggerBannerEffect(label: string, durationMs: number = 1200): void {
     const now: number = performance.now();
     this.bannerLabel = label;
@@ -900,6 +989,9 @@ export class PixiRenderer {
     }
   }
 
+  /**
+   * Ensures that the level up sprites are created and added to the effect layer.
+   */
   private ensureLevelUpSprites(): void {
     if (!this.levelUpRays) {
       this.levelUpRays = new Sprite(this.getLevelUpRaysTexture());
@@ -920,6 +1012,9 @@ export class PixiRenderer {
     }
   }
 
+  /**
+   * Hides the active banner effect sprites.
+   */
   private hideLevelUpEffect(): void {
     if (this.levelUpBanner) {
       this.levelUpBanner.visible = false;
@@ -929,6 +1024,10 @@ export class PixiRenderer {
     }
   }
 
+  /**
+   * Renders the banner effect for the current frame.
+   * @param now The current timestamp in milliseconds.
+   */
   private renderLevelUpEffect(now: number): void {
     if (this.levelUpUntil <= now) {
       this.hideLevelUpEffect();
@@ -968,6 +1067,11 @@ export class PixiRenderer {
     this.levelUpRays.alpha = alpha * 0.65;
   }
 
+  /**
+   * Builds or retrieves a cached banner texture for the given label.
+   * @param label The banner text to render.
+   * @returns The banner texture.
+   */
   private getBannerTexture(label: string): Texture {
     const normalizedLabel: string = label.trim().replace(/\s+/g, '_');
     const cacheKey: string = `fx_banner_${normalizedLabel}`;
@@ -1018,6 +1122,10 @@ export class PixiRenderer {
     return texture;
   }
 
+  /**
+   * Builds or retrieves a cached rays texture used behind banners.
+   * @returns The rays texture.
+   */
   private getLevelUpRaysTexture(): Texture {
     const cacheKey: string = 'fx_levelup_rays';
     const cached: Texture | undefined = this.textures.get(cacheKey);
@@ -1057,6 +1165,18 @@ export class PixiRenderer {
     return texture;
   }
 
+  /**
+   * Converts world coordinates to isometric screen coordinates.
+   * @param wx World x-coordinate.
+   * @param wy World y-coordinate.
+   * @param originX Camera origin x-coordinate.
+   * @param originY Camera origin y-coordinate.
+   * @param centerX Screen center x-coordinate.
+   * @param centerY Screen center y-coordinate.
+   * @param tileW Isometric tile width.
+   * @param tileH Isometric tile height.
+   * @returns The screen position.
+   */
   private isoToScreen(
     wx: number,
     wy: number,
@@ -1074,6 +1194,11 @@ export class PixiRenderer {
     return { x, y };
   }
 
+  /**
+   * Rebuilds the base tile grid when the view size changes.
+   * @param viewWidth The width of the view in tiles.
+   * @param viewHeight The height of the view in tiles.
+   */
   private rebuildView(viewWidth: number, viewHeight: number): void {
     this.viewWidth = viewWidth;
     this.viewHeight = viewHeight;
@@ -1104,6 +1229,16 @@ export class PixiRenderer {
     }
   }
 
+  /**
+   * Draws item sprites in the current view.
+   * @param ctx The rendering context containing game state.
+   * @param originX Camera origin x-coordinate.
+   * @param originY Camera origin y-coordinate.
+   * @param halfW Half the view width in tiles.
+   * @param halfH Half the view height in tiles.
+   * @param lightRadius Light falloff radius in tiles.
+   * @param now The current timestamp in milliseconds.
+   */
   private drawItems(ctx: PixiRenderContext, originX: number, originY: number, halfW: number, halfH: number, lightRadius: number, now: number): void {
     for (const it of ctx.items) {
       if (!it.mapRef || !it.pos) {
@@ -1157,6 +1292,16 @@ export class PixiRenderer {
     }
   }
 
+  /**
+   * Draws monster sprites in the current view.
+   * @param ctx The rendering context containing game state.
+   * @param originX Camera origin x-coordinate.
+   * @param originY Camera origin y-coordinate.
+   * @param halfW Half the view width in tiles.
+   * @param halfH Half the view height in tiles.
+   * @param lightRadius Light falloff radius in tiles.
+   * @param now The current timestamp in milliseconds.
+   */
   private drawMonsters(
     ctx: PixiRenderContext,
     originX: number,
@@ -1218,6 +1363,15 @@ export class PixiRenderer {
     }
   }
 
+  /**
+   * Draws the player sprite in the current view.
+   * @param originX Camera origin x-coordinate.
+   * @param originY Camera origin y-coordinate.
+   * @param halfW Half the view width in tiles.
+   * @param halfH Half the view height in tiles.
+   * @param lightRadius Light falloff radius in tiles.
+   * @param now The current timestamp in milliseconds.
+   */
   private drawPlayer(originX: number, originY: number, halfW: number, halfH: number, lightRadius: number, now: number): void {
     const screen = this.worldToScreen(originX, originY, originX, originY, halfW, halfH);
     if (!screen) {
@@ -1234,11 +1388,22 @@ export class PixiRenderer {
     this.overlayLayer.addChild(sprite);
   }
 
+  /**
+   * Computes a simple light falloff value for a distance.
+   * @param dist Distance from the light source.
+   * @param radius Maximum light radius.
+   * @returns The alpha multiplier for lighting.
+   */
   private lightFalloff(dist: number, radius: number): number {
     const t: number = Math.min(1, dist / Math.max(1, radius));
     return Math.max(0.25, 1 - t * 0.85);
   }
 
+  /**
+   * Generates a stable phase offset from a string id.
+   * @param id The id to hash.
+   * @returns A pseudo-random phase value.
+   */
   private phaseFromId(id: string): number {
     let hash: number = 0;
     for (let i: number = 0; i < id.length; i++) {
@@ -1247,6 +1412,11 @@ export class PixiRenderer {
     return (hash % 628) / 100;
   }
 
+  /**
+   * Updates fog textures and sprites to match the current view size.
+   * @param widthPx The render width in pixels.
+   * @param heightPx The render height in pixels.
+   */
   private updateFog(widthPx: number, heightPx: number): void {
     if (this.fogTexture) {
       this.fogTexture.destroy(true);
@@ -1284,6 +1454,11 @@ export class PixiRenderer {
     }
   }
 
+  /**
+   * Updates cloud textures and sprites to match the current view size.
+   * @param widthPx The render width in pixels.
+   * @param heightPx The render height in pixels.
+   */
   private updateClouds(widthPx: number, heightPx: number): void {
     if (this.cloudFarTexture) {
       this.cloudFarTexture.destroy(true);
@@ -1360,6 +1535,9 @@ export class PixiRenderer {
     }
   }
 
+  /**
+   * Advances the fog texture drift over time.
+   */
   private updateFogDrift(): void {
     if (!this.fogSprite) {
       return;
@@ -1374,6 +1552,9 @@ export class PixiRenderer {
     this.fogSprite.tilePosition.y = -this.fogOffsetY;
   }
 
+  /**
+   * Advances the near cloud texture drift over time.
+   */
   private updateCloudDrift(): void {
     if (!this.cloudSprite) {
       return;
@@ -1388,6 +1569,9 @@ export class PixiRenderer {
     this.cloudSprite.tilePosition.y = -this.cloudOffsetY;
   }
 
+  /**
+   * Advances the far cloud texture drift over time.
+   */
   private updateCloudFarDrift(): void {
     if (!this.cloudFarSprite) {
       return;
@@ -1402,6 +1586,11 @@ export class PixiRenderer {
     this.cloudFarSprite.tilePosition.y = -this.cloudFarOffsetY;
   }
 
+  /**
+   * Updates the vignette overlay to match the current view size.
+   * @param widthPx The render width in pixels.
+   * @param heightPx The render height in pixels.
+   */
   private updateVignette(widthPx: number, heightPx: number): void {
     if (this.vignetteTexture) {
       this.vignetteTexture.destroy(true);
@@ -1441,6 +1630,16 @@ export class PixiRenderer {
     }
   }
 
+  /**
+   * Converts world coordinates to top-down screen coordinates.
+   * @param wx World x-coordinate.
+   * @param wy World y-coordinate.
+   * @param originX Camera origin x-coordinate.
+   * @param originY Camera origin y-coordinate.
+   * @param halfW Half the view width in tiles.
+   * @param halfH Half the view height in tiles.
+   * @returns The screen position, if visible.
+   */
   private worldToScreen(
     wx: number,
     wy: number,
@@ -1459,6 +1658,13 @@ export class PixiRenderer {
     return { x: col * this.tileSize, y: row * this.tileSize };
   }
 
+  /**
+   * Retrieves or creates a texture by sprite key or glyph data.
+   * @param key The sprite key or cache key.
+   * @param glyph Optional glyph to render.
+   * @param color Optional glyph color.
+   * @returns The requested texture.
+   */
   private getTexture(key: SpriteKey): Texture;
   private getTexture(key: string, glyph?: string, color?: string): Texture;
   private getTexture(key: SpriteKey | string, glyph?: string, color?: string): Texture {
@@ -1476,6 +1682,13 @@ export class PixiRenderer {
     return texture;
   }
 
+  /**
+   * Creates a cached texture for a glyph rendered on a tile.
+   * @param cacheKey The cache key to reuse.
+   * @param glyph The glyph character to render.
+   * @param color The glyph color.
+   * @returns The glyph texture.
+   */
   private getGlyphTexture(cacheKey: string, glyph: string, color: string): Texture {
     const cached: Texture | undefined = this.textures.get(cacheKey);
     if (cached) {
@@ -1498,6 +1711,11 @@ export class PixiRenderer {
     return texture;
   }
 
+  /**
+   * Maps overworld tile ids to sprite keys.
+   * @param tile The overworld tile id.
+   * @returns The sprite key for the tile.
+   */
   private overworldKey(tile: string): SpriteKey {
     switch (tile) {
       case 'water':
@@ -1543,6 +1761,11 @@ export class PixiRenderer {
     }
   }
 
+  /**
+   * Maps town tile ids to sprite keys.
+   * @param tile The town tile id.
+   * @returns The sprite key for the tile.
+   */
   private townKey(tile: string): SpriteKey {
     switch (tile) {
       case 'wall':
@@ -1567,6 +1790,12 @@ export class PixiRenderer {
     }
   }
 
+  /**
+   * Maps dungeon tiles to sprite keys based on theme.
+   * @param theme The dungeon theme.
+   * @param tile The dungeon tile id.
+   * @returns The sprite key for the tile.
+   */
   private dungeonKey(theme: DungeonTheme, tile: string): SpriteKey {
     switch (tile) {
       case 'wall':
@@ -1583,6 +1812,11 @@ export class PixiRenderer {
     }
   }
 
+  /**
+   * Maps monster glyphs to sprite keys.
+   * @param glyph The monster glyph.
+   * @returns The sprite key for the monster.
+   */
   private monsterKey(glyph: string): SpriteKey {
     if (glyph === 's') {
       return 'ent_slime';
@@ -1600,6 +1834,11 @@ export class PixiRenderer {
   }
 }
 
+/**
+ * Returns palette colors for dungeon themes.
+ * @param theme The dungeon theme.
+ * @returns Color palette for wall, floor, stairs, and glyphs.
+ */
 function themePalette(theme: DungeonTheme): { wall: string; floor: string; stairs: string; glyph: string } {
   switch (theme) {
     case 'ruins':

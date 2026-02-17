@@ -8,6 +8,14 @@ export type OverworldNavOptions = {
   maxNodes: number;
 };
 
+/**
+ * Finds the nearest matching overworld tile within a radius.
+ * @param overworld The overworld instance.
+ * @param from The start point.
+ * @param wanted The desired tile kind.
+ * @param maxRadius The maximum search radius.
+ * @returns The matching point, or undefined if not found.
+ */
 export function findNearestOverworldTile(
   overworld: Overworld,
   from: Point,
@@ -43,6 +51,14 @@ export function findNearestOverworldTile(
   return undefined;
 }
 
+/**
+ * Finds a path on the overworld using A* with optional road bias.
+ * @param overworld The overworld instance.
+ * @param from The start point.
+ * @param to The goal point.
+ * @param options Navigation options.
+ * @returns The path, or undefined if not found.
+ */
 export function findOverworldPath(overworld: Overworld, from: Point, to: Point, options: OverworldNavOptions): Point[] | undefined {
   const cost = (p: Point): number => {
     if (!options.preferRoads) {
@@ -83,6 +99,16 @@ export function findOverworldPath(overworld: Overworld, from: Point, to: Point, 
   return path ?? undefined;
 }
 
+/**
+ * Converts a canvas click into a world point centered on the player.
+ * @param canvas The canvas element.
+ * @param e The mouse event.
+ * @param playerPos The player position.
+ * @param viewWidthTiles The view width in tiles.
+ * @param viewHeightTiles The view height in tiles.
+ * @param tileSizePx The tile size in pixels.
+ * @returns The world point.
+ */
 export function canvasClickToWorldPoint(
   canvas: HTMLCanvasElement,
   e: MouseEvent,

@@ -3,6 +3,12 @@ import { clamp } from '../core/util';
 import type { Dungeon } from '../maps/dungeon';
 import { getDungeonTile, isDungeonOpaque, setVisibility } from '../maps/dungeon';
 
+/**
+ * Computes a Bresenham line between two points.
+ * @param a The start point.
+ * @param b The end point.
+ * @returns The line points.
+ */
 function bresenhamLine(a: Point, b: Point): Point[] {
   const points: Point[] = [];
   let x0: number = a.x;
@@ -19,7 +25,9 @@ function bresenhamLine(a: Point, b: Point): Point[] {
 
   while (true) {
     points.push({ x: x0, y: y0 });
-    if (x0 === x1 && y0 === y1) { break; }
+    if (x0 === x1 && y0 === y1) {
+      break;
+    }
 
     const e2: number = 2 * err;
     if (e2 > -dy) {
@@ -35,12 +43,25 @@ function bresenhamLine(a: Point, b: Point): Point[] {
   return points;
 }
 
+/**
+ * Converts all visible tiles to seen tiles.
+ * @param dungeon The dungeon instance.
+ */
 export function decayVisibilityToSeen(dungeon: Dungeon): void {
   for (let i: number = 0; i < dungeon.visibility.length; i++) {
-    if (dungeon.visibility[i] === 'visible') { dungeon.visibility[i] = 'seen'; }
+    if (dungeon.visibility[i] === 'visible') {
+      dungeon.visibility[i] = 'seen';
+    }
   }
 }
 
+/**
+ * Computes field of view and marks visible tiles.
+ * @param dungeon The dungeon instance.
+ * @param origin The origin point.
+ * @param radius The view radius.
+ * @returns A set of visible tile keys.
+ */
 export function computeDungeonFov(dungeon: Dungeon, origin: Point, radius: number): Set<string> {
   const visible: Set<string> = new Set<string>();
 
@@ -55,22 +76,30 @@ export function computeDungeonFov(dungeon: Dungeon, origin: Point, radius: numbe
     for (let x: number = minX; x <= maxX; x++) {
       const dx: number = x - origin.x;
       const dy: number = y - origin.y;
-      if (dx * dx + dy * dy > r2) { continue; }
+      if (dx * dx + dy * dy > r2) {
+        continue;
+      }
 
       const line: Point[] = bresenhamLine(origin, { x, y });
 
       for (let i: number = 0; i < line.length; i++) {
         const p: Point = line[i];
-        if (p.x < 0 || p.y < 0 || p.x >= dungeon.width || p.y >= dungeon.height) { break; }
+        if (p.x < 0 || p.y < 0 || p.x >= dungeon.width || p.y >= dungeon.height) {
+          break;
+        }
 
         const k: string = `${p.x},${p.y}`;
         visible.add(k);
         setVisibility(dungeon, p.x, p.y, 'visible');
 
-        if (p.x === x && p.y === y) { break; }
+        if (p.x === x && p.y === y) {
+          break;
+        }
 
         const tile = getDungeonTile(dungeon, p.x, p.y);
-        if (isDungeonOpaque(tile) && !(p.x === origin.x && p.y === origin.y)) { break; }
+        if (isDungeonOpaque(tile) && !(p.x === origin.x && p.y === origin.y)) {
+          break;
+        }
       }
     }
   }

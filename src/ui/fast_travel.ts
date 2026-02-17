@@ -1,6 +1,12 @@
 import type { DiscoveredPoi } from '../core/discovery';
 import { t } from '../i18n';
 
+/**
+ * Renders the fast travel panel.
+ * @param pois The discovered POIs.
+ * @param onlyTowns Whether to include only towns.
+ * @returns The HTML string.
+ */
 export function renderFastTravelHtml(pois: DiscoveredPoi[], onlyTowns: boolean): string {
   const lines: string[] = [];
   lines.push(
@@ -30,6 +36,11 @@ export function renderFastTravelHtml(pois: DiscoveredPoi[], onlyTowns: boolean):
   return lines.join('');
 }
 
+/**
+ * Escapes HTML entities in a string.
+ * @param s The input string.
+ * @returns The escaped string.
+ */
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;');
 }

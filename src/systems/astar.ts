@@ -1,6 +1,16 @@
 import type { Point } from '../core/types';
 import { manhattan, keyPoint, parseKeyPoint } from '../core/util';
 
+/**
+ * Runs A* pathfinding on a grid.
+ * @param start The start point.
+ * @param goal The goal point.
+ * @param isWalkable Predicate for walkable tiles.
+ * @param isBlocked Predicate for temporarily blocked tiles.
+ * @param maxIterations Max iterations before aborting.
+ * @param stepCost Optional per-tile movement cost.
+ * @returns The path, or undefined if not found.
+ */
 export function aStar(
   start: Point,
   goal: Point,
@@ -87,6 +97,12 @@ export function aStar(
   return undefined;
 }
 
+/**
+ * Reconstructs a path from a cameFrom map.
+ * @param cameFrom The predecessor map.
+ * @param currentKey The goal key.
+ * @returns The reconstructed path.
+ */
 function reconstructPath(cameFrom: Map<string, string>, currentKey: string): Point[] {
   const totalPathKeys: string[] = [currentKey];
   while (cameFrom.has(currentKey)) {

@@ -9,6 +9,13 @@ export type OverworldMapContext = {
   items: Item[];
 };
 
+/**
+ * Renders a small ASCII map of the overworld around the player.
+ * @param ctx The map context.
+ * @param width The map width in tiles.
+ * @param height The map height in tiles.
+ * @returns The ASCII map string.
+ */
 export function renderOverworldMapAscii(ctx: OverworldMapContext, width: number, height: number): string {
   const halfW: number = Math.floor(width / 2);
   const halfH: number = Math.floor(height / 2);
@@ -52,6 +59,11 @@ export function renderOverworldMapAscii(ctx: OverworldMapContext, width: number,
   return out;
 }
 
+/**
+ * Maps an overworld tile to a glyph.
+ * @param tile The overworld tile.
+ * @returns The glyph character.
+ */
 function overworldChar(tile: string): string {
   switch (tile) {
     case 'water':

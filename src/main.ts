@@ -328,6 +328,12 @@ const RARITY_CONFIG_BY_KEY: Record<GearRarity, RarityConfig> = RARITY_CONFIGS.re
 
 const SHOP_RESTOCK_INTERVAL: number = 80;
 
+/**
+ * Computes the shop economy for the current restock cycle.
+ * @param s The game state.
+ * @param shop The shop instance.
+ * @returns The shop economy.
+ */
 function getShopEconomy(s: GameState, shop: Shop): import('./core/types').ShopEconomy {
   const cycle: number = Math.floor(s.turnCounter / SHOP_RESTOCK_INTERVAL);
   const seed: number = hash2D(s.worldSeed, shop.townWorldPos.x, shop.townWorldPos.y) ^ (cycle * 0x9e3779b9) ^ 0x5f10;
@@ -360,6 +366,12 @@ function getShopEconomy(s: GameState, shop: Shop): import('./core/types').ShopEc
   return { moodLabel, specialty, buyMultiplier, sellMultiplier, featuredItemId, restockIn };
 }
 
+/**
+ * Picks a featured item id from shop stock.
+ * @param shop The shop instance.
+ * @param rng The RNG.
+ * @returns The featured item id, or undefined.
+ */
 function getFeaturedShopItemId(shop: Shop, rng: Rng): string | undefined {
   if (shop.stockItemIds.length === 0) {
     return undefined;
@@ -374,6 +386,11 @@ function getFeaturedShopItemId(shop: Shop, rng: Rng): string | undefined {
   return ids[idx];
 }
 
+/**
+ * Returns the price multiplier for an item's rarity.
+ * @param item The item.
+ * @returns The price multiplier.
+ */
 function getRarityPriceMultiplier(item: Item): number {
   const rarity: GearRarity = item.rarity ?? 'common';
   switch (rarity) {
@@ -391,6 +408,13 @@ function getRarityPriceMultiplier(item: Item): number {
   }
 }
 
+/**
+ * Computes the shop buy price for an item.
+ * @param shop The shop instance.
+ * @param item The item.
+ * @param economy The shop economy.
+ * @returns The buy price.
+ */
 function getShopBuyPrice(shop: Shop, item: Item, economy: import('./core/types').ShopEconomy): number {
   let multiplier: number = economy.buyMultiplier;
   if (economy.specialty !== 'all') {
@@ -403,6 +427,13 @@ function getShopBuyPrice(shop: Shop, item: Item, economy: import('./core/types')
   return Math.max(1, Math.round(item.value * multiplier));
 }
 
+/**
+ * Computes the shop sell price for an item.
+ * @param shop The shop instance.
+ * @param item The item.
+ * @param economy The shop economy.
+ * @returns The sell price.
+ */
 function getShopSellPrice(shop: Shop, item: Item, economy: import('./core/types').ShopEconomy): number {
   let multiplier: number = economy.sellMultiplier;
   if (economy.specialty !== 'all') {
@@ -412,6 +443,12 @@ function getShopSellPrice(shop: Shop, item: Item, economy: import('./core/types'
   return Math.max(1, Math.round(item.value * multiplier));
 }
 
+/**
+ * Builds shop pricing tables for the current state.
+ * @param s The game state.
+ * @param shop The shop instance.
+ * @returns The pricing data.
+ */
 function buildShopPricing(
   s: GameState,
   shop: Shop
@@ -439,6 +476,11 @@ function buildShopPricing(
   return { economy, buyPrices, sellPrices };
 }
 
+/**
+ * Ensures class attributes are initialized on the player.
+ * @param player The player entity.
+ * @param classType The player class.
+ */
 function ensureClassAttributes(player: Entity, classType: CharacterClass): void {
   const cfg: ClassConfig = CLASS_CONFIG[classType];
   player.classType = classType;
@@ -456,14 +498,30 @@ function ensureClassAttributes(player: Entity, classType: CharacterClass): void 
   }
 }
 
+/**
+ * Picks a random element from a readonly array.
+ * @param arr The array to pick from.
+ * @param rng The RNG.
+ * @returns The selected element.
+ */
 function randChoice<T>(arr: readonly T[], rng: Rng): T {
   return arr[rng.nextInt(0, arr.length)];
 }
 
+/**
+ * Returns the localized monster name for a key.
+ * @param key The monster key.
+ * @returns The monster name.
+ */
 function monsterName(key: MonsterKey): string {
   return t(`monster.${key}`);
 }
 
+/**
+ * Returns the localized plural monster name for a key.
+ * @param key The monster key.
+ * @returns The plural name.
+ */
 function monsterPlural(key: MonsterKey): string {
   return t(`monster.${key}.plural`);
 }
@@ -475,6 +533,11 @@ type Pronouns = {
   reflexive: string;
 };
 
+/**
+ * Returns localized pronouns for a gender.
+ * @param gender The gender.
+ * @returns The pronouns object.
+ */
 function pronounsFor(gender: Gender): Pronouns {
   return {
     subject: t(`pronoun.subject.${gender}`),
@@ -489,6 +552,13 @@ const STORY_UPBRINGING: readonly string[] = ['story.upbringing.1', 'story.upbrin
 const STORY_TURNING_POINTS: readonly string[] = ['story.turningPoint.1', 'story.turningPoint.2', 'story.turningPoint.3'];
 const STORY_AMBITIONS: readonly string[] = ['story.ambitions.1', 'story.ambitions.2', 'story.ambitions.3'];
 
+/**
+ * Builds a character backstory.
+ * @param rng The RNG.
+ * @param classType The player class.
+ * @param gender The player gender.
+ * @returns The generated story.
+ */
 function buildStory(rng: Rng, classType: CharacterClass, gender: Gender): CharacterStory {
   const pronouns = pronounsFor(gender);
   const className: string = t(`class.${classType}.name`);
@@ -515,6 +585,13 @@ function buildStory(rng: Rng, classType: CharacterClass, gender: Gender): Charac
   };
 }
 
+/**
+ * Adds a story event to the current story log.
+ * @param state The game state.
+ * @param titleKey The i18n title key.
+ * @param detailKey The i18n detail key.
+ * @param vars Optional template variables.
+ */
 function addStoryEvent(state: GameState, titleKey: string, detailKey: string, vars: Record<string, string | number> = {}): void {
   state.story.events.push({
     turn: state.turnCounter,
@@ -523,6 +600,13 @@ function addStoryEvent(state: GameState, titleKey: string, detailKey: string, va
   });
 }
 
+/**
+ * Builds an item name from optional prefix and suffix parts.
+ * @param prefix The name prefix.
+ * @param base The base name.
+ * @param suffix The name suffix.
+ * @returns The combined item name.
+ */
 function buildItemName(prefix: string | undefined, base: string, suffix: string | undefined): string {
   const parts: string[] = [];
   if (prefix) {
@@ -535,6 +619,12 @@ function buildItemName(prefix: string | undefined, base: string, suffix: string 
   return parts.join(' ');
 }
 
+/**
+ * Rolls a rarity configuration based on power.
+ * @param power The item power.
+ * @param rng The RNG.
+ * @returns The rarity configuration.
+ */
 function rollRarity(power: number, rng: Rng): RarityConfig {
   const depthFactor: number = Math.max(0, power - 1);
   const weights: number[] = [];
@@ -556,6 +646,13 @@ function rollRarity(power: number, rng: Rng): RarityConfig {
   return RARITY_CONFIGS[RARITY_CONFIGS.length - 1];
 }
 
+/**
+ * Generates a weapon item for loot.
+ * @param id The item id.
+ * @param power The item power.
+ * @param rng The RNG.
+ * @returns The weapon item.
+ */
 function generateWeaponLoot(id: string, power: number, rng: Rng): Item {
   const rarity: RarityConfig = rollRarity(Math.max(1, power), rng);
   const base: WeaponTemplate = randChoice(WEAPON_BASES, rng);
@@ -573,6 +670,13 @@ function generateWeaponLoot(id: string, power: number, rng: Rng): Item {
   return { id, kind: 'weapon', name, attackBonus, value, rarity: rarity.key, critChance, lifesteal };
 }
 
+/**
+ * Generates an armor item for loot.
+ * @param id The item id.
+ * @param power The item power.
+ * @param rng The RNG.
+ * @returns The armor item.
+ */
 function generateArmorLoot(id: string, power: number, rng: Rng): Item {
   const rarity: RarityConfig = rollRarity(Math.max(1, power), rng);
   const base: ArmorTemplate = randChoice(ARMOR_BASES, rng);
@@ -590,6 +694,16 @@ function generateArmorLoot(id: string, power: number, rng: Rng): Item {
   return { id, kind: 'armor', name, defenseBonus, value, rarity: rarity.key, dodgeChance, thorns };
 }
 
+/**
+ * Creates a gear item with fixed stats.
+ * @param id The item id.
+ * @param slot The gear slot.
+ * @param spec The gear spec.
+ * @param attackBonus Optional attack bonus.
+ * @param defenseBonus Optional defense bonus.
+ * @param value The item value.
+ * @returns The gear item.
+ */
 function createGearItem(
   id: string,
   slot: 'weapon' | 'armor',
@@ -604,6 +718,11 @@ function createGearItem(
   return { id, kind: 'armor', name: spec.name, defenseBonus: defenseBonus ?? spec.defenseBonus ?? 0, value, rarity: 'common' };
 }
 
+/**
+ * Ensures the player has their starting gear.
+ * @param state The game state.
+ * @param classType The player class.
+ */
 function ensureStartingGear(state: GameState, classType: CharacterClass): void {
   const gear: ClassGearConfig | undefined = CLASS_GEAR[classType];
   if (!gear) {
@@ -653,6 +772,15 @@ function ensureStartingGear(state: GameState, classType: CharacterClass): void {
   }
 }
 
+/**
+ * Creates a class-specific upgrade item.
+ * @param classType The player class.
+ * @param slot The gear slot.
+ * @param id The item id.
+ * @param upgradeLevel The upgrade level.
+ * @param rng The RNG.
+ * @returns The upgrade item.
+ */
 function createClassUpgradeItem(classType: CharacterClass, slot: 'weapon' | 'armor', id: string, upgradeLevel: number, rng: Rng): Item {
   const gear: ClassGearConfig = CLASS_GEAR[classType];
   const spec: GearSpec = slot === 'weapon' ? gear.weapon : gear.armor;
@@ -703,7 +831,6 @@ const menuPanelsLabel: HTMLElement = document.getElementById('menuPanelsLabel')!
 const menuRenderLabel: HTMLElement = document.getElementById('menuRenderLabel')!;
 const nameLabel: HTMLElement = document.getElementById('nameLabel')!;
 const genderLabel: HTMLElement = document.getElementById('genderLabel')!;
-
 const btnCanvas: HTMLButtonElement = document.getElementById('btnCanvas') as HTMLButtonElement;
 const btnNewSeed: HTMLButtonElement = document.getElementById('btnNewSeed') as HTMLButtonElement;
 const btnSave: HTMLButtonElement = document.getElementById('btnSave') as HTMLButtonElement;
@@ -714,22 +841,11 @@ const btnInv: HTMLButtonElement = document.getElementById('btnInv') as HTMLButto
 const btnShop: HTMLButtonElement = document.getElementById('btnShop') as HTMLButtonElement;
 const btnStory: HTMLButtonElement = document.getElementById('btnStory') as HTMLButtonElement;
 const btnMap: HTMLButtonElement = document.getElementById('btnMap') as HTMLButtonElement;
-
 const canvas: HTMLCanvasElement = document.getElementById('gameCanvas') as HTMLCanvasElement;
 const canvasRenderer: PixiRenderer = new PixiRenderer(canvas);
 const minimapWrap: HTMLElement = document.getElementById('minimapWrap')!;
 const minimapCanvas: HTMLCanvasElement = document.getElementById('minimap') as HTMLCanvasElement;
 const minimapCtx: CanvasRenderingContext2D | null = minimapCanvas.getContext('2d');
-
-function getPixiViewSize(): { w: number; h: number } {
-  const tileSize: number = 16;
-  const widthPx: number = Math.max(1, Math.floor(canvas.width));
-  const heightPx: number = Math.max(1, Math.floor(canvas.height));
-  const w: number = Math.max(1, Math.floor(widthPx / tileSize));
-  const h: number = Math.max(1, Math.floor(heightPx / tileSize));
-  return { w, h };
-}
-
 const classModal: HTMLElement = document.getElementById('classSelect')!;
 const classSelectTitle: HTMLElement = document.getElementById('classSelectTitle')!;
 const classSelectSubtitle: HTMLElement = document.getElementById('classSelectSubtitle')!;
@@ -739,7 +855,6 @@ const nameErrorEl: HTMLElement = document.getElementById('nameError')!;
 const btnNameRandom: HTMLButtonElement = document.getElementById('btnNameRandom') as HTMLButtonElement;
 const genderSelect: HTMLSelectElement = document.getElementById('genderSelect') as HTMLSelectElement;
 const btnLoadFromModal: HTMLButtonElement = document.getElementById('btnLoadFromModal') as HTMLButtonElement;
-
 const saveModal: HTMLElement = document.getElementById('saveModal')!;
 const saveModalTitle: HTMLElement = document.getElementById('saveModalTitle')!;
 const saveModalHint: HTMLElement = document.getElementById('saveModalHint')!;
@@ -757,6 +872,22 @@ let pendingGender: Gender = 'female';
 let pendingName: string = '';
 canvasWrap.classList.add('displayNone');
 
+/**
+ * Computes the Pixi view size in tiles.
+ * @returns The view size in tiles.
+ */
+function getPixiViewSize(): { w: number; h: number } {
+  const tileSize: number = 16;
+  const widthPx: number = Math.max(1, Math.floor(canvas.width));
+  const heightPx: number = Math.max(1, Math.floor(canvas.height));
+  const w: number = Math.max(1, Math.floor(widthPx / tileSize));
+  const h: number = Math.max(1, Math.floor(heightPx / tileSize));
+  return { w, h };
+}
+
+/**
+ * Applies static localized strings to UI elements.
+ */
 function applyStaticI18n(): void {
   document.title = t('app.title');
   controlsHintEl.textContent = t('ui.hint.controls');
@@ -833,6 +964,11 @@ function applyStaticI18n(): void {
 
 applyStaticI18n();
 
+/**
+ * Normalizes a raw player name input.
+ * @param raw The raw input.
+ * @returns The normalized name.
+ */
 function normalizePlayerName(raw: string): string {
   const trimmed: string = raw.trim().replace(/\s+/g, ' ');
   if (!trimmed) {
@@ -841,6 +977,11 @@ function normalizePlayerName(raw: string): string {
   return trimmed.slice(0, 24);
 }
 
+/**
+ * Validates a player name.
+ * @param raw The raw input.
+ * @returns Validation status and message.
+ */
 function validatePlayerName(raw: string): { ok: boolean; message: string } {
   const name: string = normalizePlayerName(raw);
   if (name.length < 2) {
@@ -855,6 +996,10 @@ function validatePlayerName(raw: string): { ok: boolean; message: string } {
   return { ok: true, message: '' };
 }
 
+/**
+ * Generates a random player name.
+ * @returns The generated name.
+ */
 function generateRandomName(): string {
   const starts: string[] = ['Ar', 'Bel', 'Cor', 'Dar', 'El', 'Fa', 'Gal', 'Hal', 'Is', 'Ka', 'Lor', 'Ma', 'Nor', 'Or', 'Per'];
   const mids: string[] = ['a', 'e', 'i', 'o', 'u', 'ae', 'ia', 'eo', 'io', 'oa'];
@@ -872,6 +1017,14 @@ function generateRandomName(): string {
 pendingName = generateRandomName();
 nameInput.value = pendingName;
 
+/**
+ * Creates a new game state.
+ * @param worldSeed The world seed.
+ * @param classChoice The player class.
+ * @param gender The player gender.
+ * @param name The player name.
+ * @returns The initialized game state.
+ */
 function newGame(worldSeed: number, classChoice: CharacterClass, gender: Gender, name: string): GameState {
   const rng: Rng = new Rng(worldSeed);
   const overworld: Overworld = new Overworld(worldSeed);
@@ -939,7 +1092,12 @@ function newGame(worldSeed: number, classChoice: CharacterClass, gender: Gender,
   addStoryEvent(state, 'story.event.begin.title', 'story.event.begin.detail', { className: cfg.name });
   return state;
 }
-
+/**
+ * Finds a valid starting position on the overworld.
+ * @param overworld The overworld instance.
+ * @param rng The RNG.
+ * @returns The starting position.
+ */
 function findStartPosition(overworld: Overworld, rng: Rng): Point {
   for (let i: number = 0; i < 4000; i++) {
     const x: number = rng.nextInt(-200, 200);
@@ -953,10 +1111,16 @@ function findStartPosition(overworld: Overworld, rng: Rng): Point {
 
 let state: GameState = newGame(pendingSeed, pendingClass, pendingGender, pendingName);
 
+/**
+ * Hides the class selection modal.
+ */
 function hideClassModal(): void {
   classModal.classList.add('hidden');
 }
 
+/**
+ * Shows the class selection modal and focuses the name input.
+ */
 function showClassModal(): void {
   classModal.classList.remove('hidden');
   if (!pendingName) {
@@ -969,10 +1133,18 @@ function showClassModal(): void {
   nameInput.select();
 }
 
+/**
+ * Checks whether the class selection modal is visible.
+ * @returns True if visible.
+ */
 function isClassModalVisible(): boolean {
   return !classModal.classList.contains('hidden');
 }
 
+/**
+ * Starts a new run with the selected class.
+ * @param classChoice The chosen class.
+ */
 function startNewRun(classChoice: CharacterClass): void {
   pendingClass = classChoice;
   const gender = (genderSelect.value as Gender) || pendingGender;
@@ -1001,6 +1173,11 @@ function startNewRun(classChoice: CharacterClass): void {
   render();
 }
 
+/**
+ * Returns the current dungeon based on player map ref.
+ * @param s The game state.
+ * @returns The current dungeon, or undefined.
+ */
 function getCurrentDungeon(s: GameState): Dungeon | undefined {
   if (s.player.mapRef.kind !== 'dungeon') {
     return undefined;
@@ -1008,6 +1185,11 @@ function getCurrentDungeon(s: GameState): Dungeon | undefined {
   return s.dungeons.get(s.player.mapRef.dungeonId);
 }
 
+/**
+ * Returns the current town based on player map ref.
+ * @param s The game state.
+ * @returns The current town, or undefined.
+ */
 function getCurrentTown(s: GameState): Town | undefined {
   if (s.player.mapRef.kind !== 'town') {
     return undefined;
@@ -1015,6 +1197,15 @@ function getCurrentTown(s: GameState): Town | undefined {
   return s.towns.get(s.player.mapRef.townId);
 }
 
+/**
+ * Ensures a dungeon level exists, generating if needed.
+ * @param s The game state.
+ * @param baseId The dungeon base id.
+ * @param depth The dungeon depth.
+ * @param entranceWorldPos The entrance world position.
+ * @param layout The dungeon layout.
+ * @returns The dungeon level.
+ */
 function ensureDungeonLevel(s: GameState, baseId: string, depth: number, entranceWorldPos: Point, layout: DungeonLayout): Dungeon {
   const levelId: string = dungeonLevelId(baseId, depth);
   const existing: Dungeon | undefined = s.dungeons.get(levelId);
@@ -1038,6 +1229,12 @@ function ensureDungeonLevel(s: GameState, baseId: string, depth: number, entranc
   return dungeon;
 }
 
+/**
+ * Ensures the town interior exists, generating if needed.
+ * @param s The game state.
+ * @param townCenter The town center point.
+ * @returns The town interior.
+ */
 function ensureTownInterior(s: GameState, townCenter: Point): Town {
   const townId: string = townIdFromWorldPos(s.worldSeed, townCenter.x, townCenter.y);
   const existing: Town | undefined = s.towns.get(townId);
@@ -1053,6 +1250,12 @@ function ensureTownInterior(s: GameState, townCenter: Point): Town {
 
 const BOSS_MIN_DEPTH: number = 3;
 
+/**
+ * Spawns a batch of monsters into a dungeon.
+ * @param s The game state.
+ * @param dungeon The dungeon instance.
+ * @param seed The RNG seed.
+ */
 function spawnMonstersInDungeon(s: GameState, dungeon: Dungeon, seed: number): void {
   const monsterCount: number = 5 + Math.min(12, dungeon.depth * 2);
   const rng: Rng = new Rng(seed ^ 0xbeef);
@@ -1067,6 +1270,16 @@ function spawnMonstersInDungeon(s: GameState, dungeon: Dungeon, seed: number): v
   }
 }
 
+/**
+ * Creates a monster scaled to the dungeon depth.
+ * @param depth The dungeon depth.
+ * @param roll The percentile roll.
+ * @param rng The RNG.
+ * @param dungeonId The dungeon id.
+ * @param i The monster index.
+ * @param p The spawn position.
+ * @returns The monster entity.
+ */
 function createMonsterForDepth(depth: number, roll: number, rng: Rng, dungeonId: string, i: number, p: Point): Entity {
   // Slime: weak, Orc: tougher, Goblin: baseline
   if (roll < 30) {
@@ -1151,6 +1364,11 @@ function createMonsterForDepth(depth: number, roll: number, rng: Rng, dungeonId:
   };
 }
 
+/**
+ * Returns a boss name based on a dungeon theme.
+ * @param theme The dungeon theme.
+ * @returns The boss name.
+ */
 function bossNameForTheme(theme: DungeonTheme): string {
   switch (theme) {
     case 'caves':
@@ -1163,6 +1381,11 @@ function bossNameForTheme(theme: DungeonTheme): string {
   }
 }
 
+/**
+ * Returns a boss name based on dungeon depth.
+ * @param depth The dungeon depth.
+ * @returns The boss name.
+ */
 function bossNameForDepth(depth: number): string {
   if (depth < 3) {
     return t('boss.ruins');
@@ -1173,6 +1396,12 @@ function bossNameForDepth(depth: number): string {
   return t('boss.crypt');
 }
 
+/**
+ * Spawns a boss into the dungeon if eligible.
+ * @param s The game state.
+ * @param dungeon The dungeon instance.
+ * @param seed The RNG seed.
+ */
 function spawnBossInDungeon(s: GameState, dungeon: Dungeon, seed: number): void {
   if (dungeon.depth < BOSS_MIN_DEPTH) {
     return;
@@ -1208,6 +1437,12 @@ function spawnBossInDungeon(s: GameState, dungeon: Dungeon, seed: number): void 
   s.entities.push(boss);
 }
 
+/**
+ * Spawns loot items into the dungeon.
+ * @param s The game state.
+ * @param dungeon The dungeon instance.
+ * @param seed The RNG seed.
+ */
 function spawnLootInDungeon(s: GameState, dungeon: Dungeon, seed: number): void {
   const rng: Rng = new Rng(seed ^ 0x51f15);
   const lootCount: number = 8;
@@ -1245,6 +1480,10 @@ function spawnLootInDungeon(s: GameState, dungeon: Dungeon, seed: number): void 
   }
 }
 
+/**
+ * Returns the town id under the player if any.
+ * @returns The town id, or undefined.
+ */
 function getActiveTownId(): string | undefined {
   if (state.mode === 'town') {
     return state.currentTownId;
@@ -1263,6 +1502,11 @@ function getActiveTownId(): string | undefined {
   return townIdFromWorldPos(state.worldSeed, center.x, center.y);
 }
 
+/**
+ * Ensures the town has quests generated.
+ * @param s The game state.
+ * @param townPos The town position.
+ */
 function ensureQuestForTown(s: GameState, townPos: Point): void {
   const center: Point = s.overworld.getTownCenter(townPos.x, townPos.y) ?? townPos;
   const townId: string = townIdFromWorldPos(s.worldSeed, center.x, center.y);
@@ -1388,6 +1632,14 @@ function ensureQuestForTown(s: GameState, townPos: Point): void {
   }
 }
 
+/**
+ * Possibly creates quest reward item ids based on a roll.
+ * @param s The game state.
+ * @param rng The RNG.
+ * @param questId The quest id.
+ * @param power The reward power.
+ * @returns Reward item ids, or undefined.
+ */
 function maybeCreateQuestRewards(s: GameState, rng: Rng, questId: string, power: number): string[] | undefined {
   const roll: number = rng.nextInt(0, 100);
   if (roll > 40) {
@@ -1405,6 +1657,15 @@ function maybeCreateQuestRewards(s: GameState, rng: Rng, questId: string, power:
   return [firstId, secondId];
 }
 
+/**
+ * Creates reward items for boss quests.
+ * @param s The game state.
+ * @param rng The RNG.
+ * @param questId The quest id.
+ * @param power The reward power.
+ * @param bossName The boss name.
+ * @returns Reward item ids.
+ */
 function createBossQuestRewards(s: GameState, rng: Rng, questId: string, power: number, bossName: string): string[] {
   const weaponId: string = `${questId}_reward_boss_w`;
   if (!s.items.some((it) => it.id === weaponId)) {
@@ -1421,6 +1682,15 @@ function createBossQuestRewards(s: GameState, rng: Rng, questId: string, power: 
   return [weaponId, armorId];
 }
 
+/**
+ * Creates a boss relic item.
+ * @param rng The RNG.
+ * @param id The item id.
+ * @param slot The gear slot.
+ * @param power The reward power.
+ * @param bossName The boss name.
+ * @returns The relic item.
+ */
 function createBossRelicItem(rng: Rng, id: string, slot: 'weapon' | 'armor', power: number, bossName: string): Item {
   if (slot === 'weapon') {
     const item: Item = generateWeaponLoot(id, Math.max(1, power), rng);
@@ -1439,6 +1709,11 @@ function createBossRelicItem(rng: Rng, id: string, slot: 'weapon' | 'armor', pow
   return item;
 }
 
+/**
+ * Drops boss loot at the boss position if not already dropped.
+ * @param s The game state.
+ * @param boss The boss entity.
+ */
 function dropBossLoot(s: GameState, boss: Entity): void {
   if (!boss.isBoss || boss.mapRef.kind !== 'dungeon') {
     return;
@@ -1464,6 +1739,11 @@ function dropBossLoot(s: GameState, boss: Entity): void {
   addStoryEvent(s, 'story.event.boss.title', 'story.event.boss.detail', { boss: boss.name, depth: dungeon.depth });
 }
 
+/**
+ * Picks a reward type key.
+ * @param rng The RNG.
+ * @returns The reward type key.
+ */
 function pickQuestRewardType(rng: Rng): string {
   const rewardTypeRoll: number = rng.nextInt(0, 100);
   if (rewardTypeRoll < 45) {
@@ -1475,6 +1755,16 @@ function pickQuestRewardType(rng: Rng): string {
   return 'a';
 }
 
+/**
+ * Creates a quest reward item for a quest.
+ * @param s The game state.
+ * @param rng The RNG.
+ * @param questId The quest id.
+ * @param power The reward power.
+ * @param suffix The reward suffix.
+ * @param typeKey The reward type key.
+ * @returns The reward item id.
+ */
 function createQuestRewardItem(s: GameState, rng: Rng, questId: string, power: number, suffix: string, typeKey: string): string {
   if (typeKey === 'p') {
     const id: string = `${questId}_reward_${suffix}_p`;
@@ -1509,6 +1799,13 @@ function createQuestRewardItem(s: GameState, rng: Rng, questId: string, power: n
   return id;
 }
 
+/**
+ * Records a monster kill against quest progress.
+ * @param s The game state.
+ * @param dungeonDepth The current dungeon depth.
+ * @param monsterName The monster name.
+ * @param isBoss Whether the monster is a boss.
+ */
 function recordKillForQuests(s: GameState, dungeonDepth: number, monsterName: string, isBoss: boolean): void {
   for (const q of s.quests) {
     if (q.kind !== 'killMonsters' && q.kind !== 'slayMonster' && q.kind !== 'slayBoss') {
@@ -1541,6 +1838,11 @@ function recordKillForQuests(s: GameState, dungeonDepth: number, monsterName: st
   }
 }
 
+/**
+ * Records dungeon depth progress for reach-depth quests.
+ * @param s The game state.
+ * @param dungeonDepth The current dungeon depth.
+ */
 function recordDepthForQuests(s: GameState, dungeonDepth: number): void {
   for (const q of s.quests) {
     if (q.kind !== 'reachDepth') {
@@ -1559,6 +1861,10 @@ function recordDepthForQuests(s: GameState, dungeonDepth: number): void {
   }
 }
 
+/**
+ * Applies start-of-turn status effects to the player.
+ * @param s The game state.
+ */
 function applyStatusEffectsStartOfTurn(s: GameState): void {
   const effects = s.player.statusEffects ?? [];
   if (effects.length === 0) {
@@ -1580,6 +1886,10 @@ function applyStatusEffectsStartOfTurn(s: GameState): void {
   }
 }
 
+/**
+ * Applies a poison effect when a slime attacks.
+ * @param attacker The attacking entity.
+ */
 function maybeApplyPoisonFromAttacker(attacker: Entity): void {
   // Slimes have a chance to poison.
   if (attacker.name !== monsterName('slime')) {
@@ -1602,6 +1912,11 @@ function maybeApplyPoisonFromAttacker(attacker: Entity): void {
   state.log.push(t('log.poisoned'));
 }
 
+/**
+ * Restocks a shop on its interval.
+ * @param s The game state.
+ * @param shop The shop instance.
+ */
 function maybeRestockShop(s: GameState, shop: Shop): void {
   // Restock every 80 turns (simple timer) - deterministic but time-based.
   const needsRestock: boolean = s.turnCounter % SHOP_RESTOCK_INTERVAL === 0;
@@ -1645,6 +1960,14 @@ function maybeRestockShop(s: GameState, shop: Shop): void {
   s.log.push(t('log.shop.restock'));
 }
 
+/**
+ * Adds class-specific gear to a shop.
+ * @param s The game state.
+ * @param shopId The shop id.
+ * @param stock The current stock list.
+ * @param tier The shop tier.
+ * @param rng The RNG.
+ */
 function addClassGearToShop(s: GameState, shopId: string, stock: string[], tier: number, rng: Rng): void {
   if (!CLASS_GEAR[s.playerClass]) {
     return;
@@ -1668,6 +1991,12 @@ function addClassGearToShop(s: GameState, shopId: string, stock: string[], tier:
   }
 }
 
+/**
+ * Ensures the town has a shop entry and stock.
+ * @param s The game state.
+ * @param townPos The town position.
+ * @returns The shop instance.
+ */
 function ensureShopForTown(s: GameState, townPos: Point): Shop {
   const center: Point = s.overworld.getTownCenter(townPos.x, townPos.y) ?? townPos;
   const shopId: string = townIdFromWorldPos(s.worldSeed, center.x, center.y);
@@ -1709,10 +2038,18 @@ function ensureShopForTown(s: GameState, townPos: Point): Shop {
   return created;
 }
 
+/**
+ * Returns true when the player is inside a town.
+ * @returns True when in town.
+ */
 function isStandingOnTown(): boolean {
   return state.mode === 'town';
 }
 
+/**
+ * Returns the town tile at the player position.
+ * @returns The town tile, or undefined.
+ */
 function getTownTileAtPlayer(): import('./core/types').TownTile | undefined {
   if (state.mode !== 'town') {
     return undefined;
@@ -1724,6 +2061,10 @@ function getTownTileAtPlayer(): import('./core/types').TownTile | undefined {
   return getTownTile(town, state.player.pos.x, state.player.pos.y);
 }
 
+/**
+ * Returns true if the player is at or near the town gate.
+ * @returns True if near the gate.
+ */
 function isAtOrNearTownGate(): boolean {
   if (state.mode !== 'town') {
     return false;
@@ -1755,14 +2096,26 @@ function isAtOrNearTownGate(): boolean {
   return false;
 }
 
+/**
+ * Returns true if the shop panel can open here.
+ * @returns True if a shop is available.
+ */
 function canOpenShopHere(): boolean {
   return state.mode === 'town' && getTownTileAtPlayer() === 'shop';
 }
 
+/**
+ * Returns true if the quest panel can open here.
+ * @returns True if a quest is available.
+ */
 function canOpenQuestHere(): boolean {
   return state.mode === 'town' && getTownTileAtPlayer() === 'tavern';
 }
 
+/**
+ * Returns the current town world position if relevant.
+ * @returns The town world position, or undefined.
+ */
 function getActiveTownWorldPos(): Point | undefined {
   if (state.mode === 'town') {
     return state.townReturnPos;
@@ -1777,6 +2130,10 @@ function getActiveTownWorldPos(): Point | undefined {
   return undefined;
 }
 
+/**
+ * Returns the entrance type under the player in overworld.
+ * @returns The entrance kind, or undefined.
+ */
 function getOverworldEntranceKind(): 'dungeon' | 'cave' | undefined {
   if (state.mode !== 'overworld') {
     return undefined;
@@ -1791,14 +2148,26 @@ function getOverworldEntranceKind(): 'dungeon' | 'cave' | undefined {
   return undefined;
 }
 
+/**
+ * Returns true if standing on a dungeon entrance.
+ * @returns True if at a dungeon entrance.
+ */
 function isStandingOnDungeonEntrance(): boolean {
   return getOverworldEntranceKind() !== undefined;
 }
 
+/**
+ * Removes dead non-player entities.
+ * @param s The game state.
+ */
 function removeDeadEntities(s: GameState): void {
   s.entities = s.entities.filter((e: Entity) => e.hp > 0 || e.kind === 'player');
 }
 
+/**
+ * Handles a player action and advances the turn.
+ * @param action The action to handle.
+ */
 function handleAction(action: Action): void {
   if (action.kind === 'toggleRenderer') {
     state.rendererMode = state.rendererMode === 'isometric' ? 'canvas' : 'isometric';
@@ -1930,6 +2299,11 @@ function handleAction(action: Action): void {
   render();
 }
 
+/**
+ * Performs the player turn and returns whether time advanced.
+ * @param action The player action.
+ * @returns True if the action advanced time.
+ */
 function playerTurn(action: Action): boolean {
   if (state.player.hp <= 0) {
     return false;
@@ -2033,6 +2407,10 @@ function playerTurn(action: Action): boolean {
   return false;
 }
 
+/**
+ * Attempts to pick up an item at the player position.
+ * @returns True if an item was picked up.
+ */
 function pickupAtPlayer(): boolean {
   const dungeon: Dungeon | undefined = getCurrentDungeon(state);
   if (state.mode !== 'dungeon' || !dungeon) {
@@ -2064,6 +2442,12 @@ function pickupAtPlayer(): boolean {
   return false;
 }
 
+/**
+ * Tries to move the player by delta in the current mode.
+ * @param dx The x delta.
+ * @param dy The y delta.
+ * @returns True if movement occurred.
+ */
 function tryMovePlayer(dx: number, dy: number): boolean {
   const target: Point = add(state.player.pos, { x: dx, y: dy });
 
@@ -2145,6 +2529,11 @@ function tryMovePlayer(dx: number, dy: number): boolean {
   return moved;
 }
 
+/**
+ * Returns the equipped weapon item for an entity.
+ * @param entity The entity.
+ * @returns The weapon item, or undefined.
+ */
 function getEquippedWeaponItem(entity: Entity): Item | undefined {
   const weaponId: string | undefined = entity.equipment.weaponItemId;
   if (!weaponId) {
@@ -2153,6 +2542,11 @@ function getEquippedWeaponItem(entity: Entity): Item | undefined {
   return state.items.find((x) => x.id === weaponId);
 }
 
+/**
+ * Returns the equipped armor item for an entity.
+ * @param entity The entity.
+ * @returns The armor item, or undefined.
+ */
 function getEquippedArmorItem(entity: Entity): Item | undefined {
   const armorId: string | undefined = entity.equipment.armorItemId;
   if (!armorId) {
@@ -2161,26 +2555,56 @@ function getEquippedArmorItem(entity: Entity): Item | undefined {
   return state.items.find((x) => x.id === armorId);
 }
 
+/**
+ * Returns the total attack bonus from equipment.
+ * @param entity The entity.
+ * @returns The attack bonus.
+ */
 function getEquippedAttackBonus(entity: Entity): number {
   return getEquippedWeaponItem(entity)?.attackBonus ?? 0;
 }
 
+/**
+ * Returns the total defense bonus from equipment.
+ * @param entity The entity.
+ * @returns The defense bonus.
+ */
 function getEquippedDefenseBonus(entity: Entity): number {
   return getEquippedArmorItem(entity)?.defenseBonus ?? 0;
 }
 
+/**
+ * Returns the total crit chance from equipment.
+ * @param entity The entity.
+ * @returns The crit chance percent.
+ */
 function getEquippedCritChance(entity: Entity): number {
   return getEquippedWeaponItem(entity)?.critChance ?? 0;
 }
 
+/**
+ * Returns the lifesteal percent from equipment.
+ * @param entity The entity.
+ * @returns The lifesteal percent.
+ */
 function getEquippedLifesteal(entity: Entity): number {
   return getEquippedWeaponItem(entity)?.lifesteal ?? 0;
 }
 
+/**
+ * Returns the dodge chance percent from equipment.
+ * @param entity The entity.
+ * @returns The dodge chance percent.
+ */
 function getEquippedDodgeChance(entity: Entity): number {
   return getEquippedArmorItem(entity)?.dodgeChance ?? 0;
 }
 
+/**
+ * Returns the thorns damage from equipment.
+ * @param entity The entity.
+ * @returns The thorns damage.
+ */
 function getEquippedThorns(entity: Entity): number {
   return getEquippedArmorItem(entity)?.thorns ?? 0;
 }
@@ -2194,6 +2618,12 @@ type LevelUpGains = {
   intellect: number;
 };
 
+/**
+ * Applies level-up gains based on class and level.
+ * @param player The player entity.
+ * @param classType The player class.
+ * @returns The gains applied.
+ */
 function applyLevelUpGrowth(player: Entity, classType: CharacterClass): LevelUpGains {
   ensureClassAttributes(player, classType);
 
@@ -2247,6 +2677,10 @@ function applyLevelUpGrowth(player: Entity, classType: CharacterClass): LevelUpG
   return gains;
 }
 
+/**
+ * Awards XP and handles level-ups.
+ * @param amount The XP amount.
+ */
 function awardXp(amount: number): void {
   state.player.xp += amount;
   while (state.player.xp >= xpToNextLevel(state.player.level)) {
@@ -2273,10 +2707,20 @@ function awardXp(amount: number): void {
   }
 }
 
+/**
+ * Returns the XP required for the next level.
+ * @param level The current level.
+ * @returns The XP requirement.
+ */
 function xpToNextLevel(level: number): number {
   return 25 + (level - 1) * 12;
 }
 
+/**
+ * Resolves an attack from attacker to defender.
+ * @param attacker The attacking entity.
+ * @param defender The defending entity.
+ */
 function attack(attacker: Entity, defender: Entity): void {
   let atk: number = attacker.baseAttack + getEquippedAttackBonus(attacker);
   let def: number = defender.baseDefense + getEquippedDefenseBonus(defender);
@@ -2424,6 +2868,11 @@ function attack(attacker: Entity, defender: Entity): void {
   }
 }
 
+/**
+ * Executes the wraith special drain attack.
+ * @param attacker The attacking entity.
+ * @param defender The defending entity.
+ */
 function wraithDrain(attacker: Entity, defender: Entity): void {
   const def: number = defender.baseDefense + getEquippedDefenseBonus(defender);
   const base: number = 2 + Math.floor(attacker.baseAttack / 2) + state.rng.nextInt(0, 3);
@@ -2444,6 +2893,9 @@ function wraithDrain(attacker: Entity, defender: Entity): void {
   }
 }
 
+/**
+ * Executes the monsters' turn in a dungeon.
+ */
 function monstersTurn(): void {
   if (state.mode !== 'dungeon') {
     return;
@@ -2516,6 +2968,11 @@ function monstersTurn(): void {
   }
 }
 
+/**
+ * Enters a dungeon or cave at the given world position.
+ * @param worldPos The overworld position.
+ * @param entranceKind The entrance kind.
+ */
 function enterDungeonAt(worldPos: Point, entranceKind: 'dungeon' | 'cave'): void {
   const layout: DungeonLayout = entranceKind === 'cave' ? 'caves' : 'rooms';
   const baseId: string =
@@ -2536,6 +2993,10 @@ function enterDungeonAt(worldPos: Point, entranceKind: 'dungeon' | 'cave'): void
   triggerDungeonBanner(depth);
 }
 
+/**
+ * Enters a town at the given world position.
+ * @param worldPos The overworld position.
+ */
 function enterTownAt(worldPos: Point): void {
   const center: Point = state.overworld.getTownCenter(worldPos.x, worldPos.y) ?? worldPos;
   const town: Town = ensureTownInterior(state, center);
@@ -2550,6 +3011,9 @@ function enterTownAt(worldPos: Point): void {
   addStoryEvent(state, 'story.event.enterTown.title', 'story.event.enterTown.detail', { townId: town.id });
 }
 
+/**
+ * Exits the town back to the overworld.
+ */
 function exitTownToOverworld(): void {
   const returnPos: Point = state.townReturnPos ?? { x: 0, y: 0 };
   state.mode = 'overworld';
@@ -2561,6 +3025,9 @@ function exitTownToOverworld(): void {
   addStoryEvent(state, 'story.event.returnOverworld.title', 'story.event.returnOverworld.detail');
 }
 
+/**
+ * Descends one dungeon level.
+ */
 function goDownLevel(): void {
   const current: DungeonStackFrame | undefined = state.dungeonStack[state.dungeonStack.length - 1];
   if (!current) {
@@ -2579,6 +3046,9 @@ function goDownLevel(): void {
   triggerDungeonBanner(nextDepth);
 }
 
+/**
+ * Ascends one dungeon level or exits to overworld.
+ */
 function goUpLevelOrExit(): void {
   if (state.dungeonStack.length <= 1) {
     const top: DungeonStackFrame | undefined = state.dungeonStack[0];
@@ -2610,6 +3080,10 @@ function goUpLevelOrExit(): void {
   triggerDungeonBanner(prev.depth);
 }
 
+/**
+ * Sets an auto-walk destination on the overworld.
+ * @param dest The destination point.
+ */
 function setDestination(dest: Point): void {
   if (state.mode !== 'overworld') {
     return;
@@ -2635,6 +3109,9 @@ function setDestination(dest: Point): void {
   state.log.push(t('log.autoWalk.set', { x: dest.x, y: dest.y }));
 }
 
+/**
+ * Syncs renderer UI visibility with the chosen renderer.
+ */
 function syncRendererUi(): void {
   asciiEl.style.display = 'none';
   canvasWrap.style.display = 'block';
@@ -2643,6 +3120,10 @@ function syncRendererUi(): void {
 let fxRenderUntil: number = 0;
 let fxRenderHandle: number = 0;
 
+/**
+ * Runs a temporary render loop for time-based FX.
+ * @param durationMs The duration in milliseconds.
+ */
 function runFxRenderLoop(durationMs: number): void {
   fxRenderUntil = Math.max(fxRenderUntil, performance.now() + durationMs);
   if (fxRenderHandle) {
@@ -2663,11 +3144,18 @@ function runFxRenderLoop(durationMs: number): void {
   fxRenderHandle = requestAnimationFrame(tick);
 }
 
+/**
+ * Triggers the dungeon depth banner.
+ * @param depth The dungeon depth.
+ */
 function triggerDungeonBanner(depth: number): void {
   canvasRenderer.triggerBannerEffect(t('ui.fx.dungeonDepth', { depth: depth + 1 }), 1200);
   runFxRenderLoop(1200);
 }
 
+/**
+ * Renders the full game UI and scene.
+ */
 function render(): void {
   const dungeon: Dungeon | undefined = getCurrentDungeon(state);
   const town: Town | undefined = getCurrentTown(state);
@@ -2802,6 +3290,9 @@ function render(): void {
   );
 }
 
+/**
+ * Renders the minimap overlay.
+ */
 function renderMinimap(): void {
   if (!minimapCtx) {
     return;
@@ -2845,6 +3336,11 @@ function renderMinimap(): void {
   ctx.fillRect(halfW * tileSize, halfH * tileSize, tileSize, tileSize);
 }
 
+/**
+ * Returns the minimap color for a tile.
+ * @param tile The overworld tile key.
+ * @returns The hex color.
+ */
 function minimapColor(tile: string): string {
   switch (tile) {
     case 'water':
@@ -2970,6 +3466,10 @@ panelEl.addEventListener('click', (e: MouseEvent) => {
   }
 });
 
+/**
+ * Consumes a potion from the inventory.
+ * @param itemId The potion item id.
+ */
 function usePotion(itemId: string): void {
   const it: Item | undefined = state.items.find((x) => x.id === itemId);
   if (!it || it.kind !== 'potion') {
@@ -2989,6 +3489,10 @@ function usePotion(itemId: string): void {
   state.log.push(t('item.drink', { name: it.name, amount: state.player.hp - before }));
 }
 
+/**
+ * Equips a weapon by item id.
+ * @param itemId The weapon item id.
+ */
 function equipWeapon(itemId: string): void {
   const it: Item | undefined = state.items.find((x) => x.id === itemId);
   if (!it || it.kind !== 'weapon') {
@@ -3001,6 +3505,10 @@ function equipWeapon(itemId: string): void {
   state.log.push(t('item.equip.weapon', { name: it.name }));
 }
 
+/**
+ * Equips an armor item by id.
+ * @param itemId The armor item id.
+ */
 function equipArmor(itemId: string): void {
   const it: Item | undefined = state.items.find((x) => x.id === itemId);
   if (!it || it.kind !== 'armor') {
@@ -3013,6 +3521,10 @@ function equipArmor(itemId: string): void {
   state.log.push(t('item.equip.armor', { name: it.name }));
 }
 
+/**
+ * Drops or discards an item.
+ * @param itemId The item id.
+ */
 function dropItem(itemId: string): void {
   const it: Item | undefined = state.items.find((x) => x.id === itemId);
   if (!it) {
@@ -3044,6 +3556,10 @@ function dropItem(itemId: string): void {
   }
 }
 
+/**
+ * Purchases an item from the shop.
+ * @param itemId The item id.
+ */
 function buyItem(itemId: string): void {
   if (!canOpenShopHere()) {
     state.log.push(t('log.shop.needBuy'));
@@ -3071,6 +3587,10 @@ function buyItem(itemId: string): void {
   state.log.push(t('item.bought', { name: it.name, price }));
 }
 
+/**
+ * Sells an item to the shop.
+ * @param itemId The item id.
+ */
 function sellItem(itemId: string): void {
   if (!canOpenShopHere()) {
     state.log.push(t('log.shop.needSell'));
@@ -3107,6 +3627,10 @@ function sellItem(itemId: string): void {
   state.log.push(t('item.sold', { name: it.name, price }));
 }
 
+/**
+ * Turns in a completed quest.
+ * @param questId The quest id.
+ */
 function turnInQuest(questId: string): void {
   const townId: string | undefined = getActiveTownId();
   if (!townId) {
@@ -3152,6 +3676,11 @@ function turnInQuest(questId: string): void {
   addStoryEvent(state, 'story.event.quest.title', 'story.event.quest.detail', { desc: q.description });
 }
 
+/**
+ * Chooses a reward for a quest.
+ * @param questId The quest id.
+ * @param rewardId The reward item id.
+ */
 function chooseQuestReward(questId: string, rewardId: string): void {
   const q = state.quests.find((x) => x.id === questId);
   if (!q) {
@@ -3172,10 +3701,20 @@ function chooseQuestReward(questId: string, rewardId: string): void {
   }
 }
 
+/**
+ * Escapes HTML special characters.
+ * @param s The raw string.
+ * @returns The escaped string.
+ */
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+/**
+ * Maps a keyboard event to a game action.
+ * @param e The keyboard event.
+ * @returns The action, or undefined.
+ */
 function keyToAction(e: KeyboardEvent): Action | undefined {
   if (e.key === 'r' || e.key === 'R') {
     return { kind: 'toggleRenderer' };
@@ -3375,6 +3914,10 @@ saveModal.addEventListener('click', (e: MouseEvent) => {
   }
 });
 
+/**
+ * Builds the save data object from current state.
+ * @returns The save data.
+ */
 function buildSaveData(): SaveDataV3 {
   const dungeons: Dungeon[] = [...state.dungeons.values()];
   const shops: Shop[] = [...state.shops.values()];
@@ -3400,12 +3943,20 @@ function buildSaveData(): SaveDataV3 {
   };
 }
 
+/**
+ * Saves current state to local storage.
+ */
 function doSave(): void {
   const data: SaveDataV3 = buildSaveData();
   saveToLocalStorage(data);
   state.log.push(t('log.saved'));
 }
 
+/**
+ * Applies loaded save data to state.
+ * @param data The loaded save data.
+ * @returns True if applied successfully.
+ */
 function applyLoadedSave(data: SaveDataV3): boolean {
   const rng: Rng = new Rng(data.worldSeed);
   const overworld: Overworld = new Overworld(data.worldSeed);
@@ -3496,6 +4047,9 @@ function applyLoadedSave(data: SaveDataV3): boolean {
   return true;
 }
 
+/**
+ * Loads a save from local storage.
+ */
 function doLoad(): void {
   const data: SaveDataV3 | undefined = loadFromLocalStorage();
   if (!data) {
@@ -3505,16 +4059,27 @@ function doLoad(): void {
   applyLoadedSave(data);
 }
 
+/**
+ * Exports the current save to the modal.
+ */
 function exportSaveJson(): void {
   const code: string = serializeSaveDataBase62(buildSaveData());
   openSaveModal('export', code);
   state.log.push(t('log.save.shareReady'));
 }
 
+/**
+ * Opens the import modal.
+ */
 function importSaveJson(): void {
   openSaveModal('import');
 }
 
+/**
+ * Opens the save modal in the specified mode.
+ * @param mode The modal mode.
+ * @param json The optional JSON content.
+ */
 function openSaveModal(mode: SaveModalMode, json: string = ''): void {
   saveModalMode = mode;
   saveModalTitle.textContent = mode === 'export' ? t('ui.saveModal.title.export') : t('ui.saveModal.title.import');
@@ -3531,10 +4096,16 @@ function openSaveModal(mode: SaveModalMode, json: string = ''): void {
   }, 0);
 }
 
+/**
+ * Closes the save modal.
+ */
 function closeSaveModal(): void {
   saveModal.classList.add('hidden');
 }
 
+/**
+ * Copies the save JSON to clipboard.
+ */
 function copySaveJson(): void {
   const text: string = saveJsonText.value;
   if (!text) {
@@ -3556,6 +4127,10 @@ function copySaveJson(): void {
   fallbackCopySaveJson(text);
 }
 
+/**
+ * Uses a legacy copy fallback for save JSON.
+ * @param text The JSON text.
+ */
 function fallbackCopySaveJson(text: string): void {
   saveJsonText.focus();
   saveJsonText.select();
@@ -3567,6 +4142,9 @@ function fallbackCopySaveJson(text: string): void {
   }
 }
 
+/**
+ * Loads a save pasted into the modal.
+ */
 function loadSaveFromModal(): void {
   const code: string = saveJsonText.value.trim();
   if (!code) {
@@ -3583,10 +4161,21 @@ function loadSaveFromModal(): void {
   }
 }
 
+/**
+ * Returns the dungeon layout from a base id.
+ * @param baseId The base id.
+ * @returns The dungeon layout.
+ */
 function layoutFromBaseId(baseId: string): DungeonLayout {
   return baseId.startsWith('cave_') ? 'caves' : 'rooms';
 }
 
+/**
+ * Rebuilds the dungeon stack from save data.
+ * @param data The save data.
+ * @param player The player entity.
+ * @returns The dungeon stack frames.
+ */
 function rebuildDungeonStackFromPlayer(data: SaveDataV3, player: Entity): DungeonStackFrame[] {
   const mapRef = player.mapRef;
   if (mapRef.kind !== 'dungeon') {

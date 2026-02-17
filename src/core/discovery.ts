@@ -12,10 +12,24 @@ export type DiscoveredPoi = {
   discoveredTurn: number;
 };
 
+/**
+ * Builds a stable id for a discovered point of interest.
+ * @param kind The POI kind.
+ * @param pos The world position.
+ * @returns The POI id.
+ */
 export function poiId(kind: DiscoveredPoiKind, pos: Point): string {
   return `${kind}:${pos.x},${pos.y}`;
 }
 
+/**
+ * Checks whether the player discovers a POI at the current position.
+ * @param overworld The overworld map.
+ * @param playerPos The player position.
+ * @param discovered The current list of discovered POIs.
+ * @param turnCounter The current turn counter.
+ * @returns True if a new POI is discovered.
+ */
 export function maybeDiscoverPois(overworld: Overworld, playerPos: Point, discovered: DiscoveredPoi[], turnCounter: number): boolean {
   const tile: string = overworld.getTile(playerPos.x, playerPos.y);
   if (tile !== 'town' && tile !== 'dungeon' && tile !== 'cave') {

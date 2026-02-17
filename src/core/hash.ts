@@ -1,3 +1,10 @@
+/**
+ * Computes a deterministic 2D hash from a seed and coordinates.
+ * @param seed The seed value.
+ * @param x The x coordinate.
+ * @param y The y coordinate.
+ * @returns The hashed value.
+ */
 export function hash2D(seed: number, x: number, y: number): number {
   let h: number = seed | 0;
   h ^= (x * 374761393) | 0;

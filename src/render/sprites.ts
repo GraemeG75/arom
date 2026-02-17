@@ -51,16 +51,28 @@ export type SpriteKey =
   | 'ui_path'
   | 'ui_destination';
 
+/**
+ * Generates and stores small canvas-based sprites for tiles and entities.
+ */
 export class SpriteAtlas {
   private readonly tileSize: number;
   private readonly sprites: Map<SpriteKey, HTMLCanvasElement>;
 
+  /**
+   * Creates a new atlas for a given tile size.
+   * @param tileSize The tile size in pixels.
+   */
   public constructor(tileSize: number) {
     this.tileSize = tileSize;
     this.sprites = new Map<SpriteKey, HTMLCanvasElement>();
     this.buildAll();
   }
 
+  /**
+   * Returns the sprite canvas for a given key.
+   * @param key The sprite key.
+   * @returns The sprite canvas.
+   */
   public get(key: SpriteKey): HTMLCanvasElement {
     const s: HTMLCanvasElement | undefined = this.sprites.get(key);
     if (!s) {
@@ -69,6 +81,9 @@ export class SpriteAtlas {
     return s;
   }
 
+  /**
+   * Builds all sprites into the atlas.
+   */
   private buildAll(): void {
     // Overworld
     this.sprites.set(
@@ -288,6 +303,11 @@ export class SpriteAtlas {
     );
   }
 
+  /**
+   * Creates a sprite canvas and draws with the provided callback.
+   * @param draw The draw callback.
+   * @returns The sprite canvas.
+   */
   private make(draw: (ctx: CanvasRenderingContext2D) => void): HTMLCanvasElement {
     const c: HTMLCanvasElement = document.createElement('canvas');
     c.width = this.tileSize;
@@ -301,6 +321,12 @@ export class SpriteAtlas {
     return c;
   }
 
+  /**
+   * Fills a base color with a simple speckle pattern.
+   * @param ctx The canvas context.
+   * @param base The base color.
+   * @param speck The speckle color.
+   */
   private fill(ctx: CanvasRenderingContext2D, base: string, speck: string): void {
     ctx.fillStyle = base;
     ctx.fillRect(0, 0, this.tileSize, this.tileSize);
@@ -312,6 +338,10 @@ export class SpriteAtlas {
     }
   }
 
+  /**
+   * Draws a forest tile pattern.
+   * @param ctx The canvas context.
+   */
   private patternForest(ctx: CanvasRenderingContext2D): void {
     this.fill(ctx, '#0e2a1b', '#184a2f');
     ctx.fillStyle = '#1e6a45';
@@ -322,6 +352,10 @@ export class SpriteAtlas {
     ctx.fillRect(11, 10, 1, 2);
   }
 
+  /**
+   * Draws a mountain tile pattern.
+   * @param ctx The canvas context.
+   */
   private patternMountain(ctx: CanvasRenderingContext2D): void {
     this.fill(ctx, '#3a3f46', '#555b63');
     ctx.fillStyle = '#9aa1ab';
@@ -333,6 +367,10 @@ export class SpriteAtlas {
     ctx.fill();
   }
 
+  /**
+   * Draws a snow-capped mountain tile pattern.
+   * @param ctx The canvas context.
+   */
   private patternMountainSnow(ctx: CanvasRenderingContext2D): void {
     this.fill(ctx, '#4a515b', '#6b737d');
     ctx.fillStyle = '#aab2bc';
@@ -351,6 +389,10 @@ export class SpriteAtlas {
     ctx.fill();
   }
 
+  /**
+   * Draws a road tile pattern.
+   * @param ctx The canvas context.
+   */
   private patternRoad(ctx: CanvasRenderingContext2D): void {
     this.fill(ctx, '#2b251c', '#3a2e21');
     ctx.fillStyle = '#d4c3a3';
@@ -359,6 +401,10 @@ export class SpriteAtlas {
     }
   }
 
+  /**
+   * Draws a town tile pattern.
+   * @param ctx The canvas context.
+   */
   private patternTown(ctx: CanvasRenderingContext2D): void {
     this.fill(ctx, '#3b2f23', '#4a3a2b');
     ctx.fillStyle = '#f4e6cc';
@@ -368,10 +414,18 @@ export class SpriteAtlas {
     ctx.fillRect(7, 10, 2, 3);
   }
 
+  /**
+   * Draws a town ground tile pattern.
+   * @param ctx The canvas context.
+   */
   private patternTownGround(ctx: CanvasRenderingContext2D): void {
     this.fill(ctx, '#2f2720', '#3f352b');
   }
 
+  /**
+   * Draws a town road tile pattern.
+   * @param ctx The canvas context.
+   */
   private patternTownRoad(ctx: CanvasRenderingContext2D): void {
     this.fill(ctx, '#3a2f25', '#4a3b2e');
     ctx.fillStyle = '#c8b08a';
@@ -381,6 +435,10 @@ export class SpriteAtlas {
     }
   }
 
+  /**
+   * Draws a town square tile pattern.
+   * @param ctx The canvas context.
+   */
   private patternTownSquare(ctx: CanvasRenderingContext2D): void {
     this.fill(ctx, '#3d332a', '#4f4134');
     ctx.strokeStyle = '#d5c1a5';
@@ -389,6 +447,12 @@ export class SpriteAtlas {
     ctx.fillRect(7, 7, 2, 2);
   }
 
+  /**
+   * Draws a town building tile pattern.
+   * @param ctx The canvas context.
+   * @param wall The wall color.
+   * @param roof The roof color.
+   */
   private patternTownBuilding(ctx: CanvasRenderingContext2D, wall: string, roof: string): void {
     this.fill(ctx, '#2f2720', '#3f352b');
     ctx.fillStyle = wall;
@@ -399,12 +463,20 @@ export class SpriteAtlas {
     ctx.fillRect(7, 9, 2, 4);
   }
 
+  /**
+   * Draws a town wall tile pattern.
+   * @param ctx The canvas context.
+   */
   private patternTownWall(ctx: CanvasRenderingContext2D): void {
     this.fill(ctx, '#232a34', '#343f4d');
     ctx.fillStyle = '#47556b';
     ctx.fillRect(2, 6, 12, 4);
   }
 
+  /**
+   * Draws a town gate tile pattern.
+   * @param ctx The canvas context.
+   */
   private patternTownGate(ctx: CanvasRenderingContext2D): void {
     this.fill(ctx, '#232a34', '#343f4d');
     ctx.fillStyle = '#b89a74';
@@ -413,6 +485,10 @@ export class SpriteAtlas {
     ctx.fillRect(7, 8, 2, 4);
   }
 
+  /**
+   * Draws a town interior floor tile pattern.
+   * @param ctx The canvas context.
+   */
   private patternTownInteriorFloor(ctx: CanvasRenderingContext2D): void {
     this.fill(ctx, '#1d1a16', '#2b241d');
     ctx.fillStyle = '#3a3026';
@@ -420,12 +496,20 @@ export class SpriteAtlas {
     ctx.fillRect(10, 11, 1, 1);
   }
 
+  /**
+   * Draws a town interior wall tile pattern.
+   * @param ctx The canvas context.
+   */
   private patternTownInteriorWall(ctx: CanvasRenderingContext2D): void {
     this.fill(ctx, '#2a2430', '#3a3242');
     ctx.fillStyle = '#4a4256';
     ctx.fillRect(2, 6, 12, 4);
   }
 
+  /**
+   * Draws a town interior road tile pattern.
+   * @param ctx The canvas context.
+   */
   private patternTownInteriorRoad(ctx: CanvasRenderingContext2D): void {
     this.fill(ctx, '#2b241d', '#3a2f25');
     ctx.fillStyle = '#a88f73';
@@ -434,6 +518,10 @@ export class SpriteAtlas {
     }
   }
 
+  /**
+   * Draws a town interior square tile pattern.
+   * @param ctx The canvas context.
+   */
   private patternTownInteriorSquare(ctx: CanvasRenderingContext2D): void {
     this.fill(ctx, '#2f2924', '#3d352f');
     ctx.strokeStyle = '#cdb89a';
@@ -442,6 +530,10 @@ export class SpriteAtlas {
     ctx.fillRect(7, 7, 2, 2);
   }
 
+  /**
+   * Draws a town interior gate tile pattern.
+   * @param ctx The canvas context.
+   */
   private patternTownInteriorGate(ctx: CanvasRenderingContext2D): void {
     this.fill(ctx, '#2a2430', '#3a3242');
     ctx.fillStyle = '#b08d65';
@@ -450,6 +542,12 @@ export class SpriteAtlas {
     ctx.fillRect(7, 8, 2, 4);
   }
 
+  /**
+   * Draws a town interior building tile pattern.
+   * @param ctx The canvas context.
+   * @param wall The wall color.
+   * @param roof The roof color.
+   */
   private patternTownInteriorBuilding(ctx: CanvasRenderingContext2D, wall: string, roof: string): void {
     this.fill(ctx, '#1d1a16', '#2b241d');
     ctx.fillStyle = wall;
@@ -460,6 +558,10 @@ export class SpriteAtlas {
     ctx.fillRect(7, 9, 2, 4);
   }
 
+  /**
+   * Draws a dungeon entrance tile pattern.
+   * @param ctx The canvas context.
+   */
   private patternDungeonEntrance(ctx: CanvasRenderingContext2D): void {
     this.fill(ctx, '#2b2016', '#3a2b1f');
     // Stone surround
@@ -478,6 +580,10 @@ export class SpriteAtlas {
     ctx.fillRect(7, 12, 2, 1);
   }
 
+  /**
+   * Draws a cave entrance tile pattern.
+   * @param ctx The canvas context.
+   */
   private patternCaveEntrance(ctx: CanvasRenderingContext2D): void {
     this.fill(ctx, '#3a3f46', '#555b63');
     ctx.fillStyle = '#0b0b0b';
@@ -492,6 +598,12 @@ export class SpriteAtlas {
     ctx.fillRect(4, 6, 8, 1);
   }
 
+  /**
+   * Draws a stone tile pattern.
+   * @param ctx The canvas context.
+   * @param base The base color.
+   * @param highlight The highlight color.
+   */
   private patternStone(ctx: CanvasRenderingContext2D, base: string, highlight: string): void {
     this.fill(ctx, base, highlight);
     ctx.fillStyle = highlight;
@@ -499,6 +611,13 @@ export class SpriteAtlas {
     ctx.fillRect(8, 9, 6, 2);
   }
 
+  /**
+   * Draws a boss floor tile pattern with a rune.
+   * @param ctx The canvas context.
+   * @param base The base color.
+   * @param highlight The highlight color.
+   * @param rune The rune color.
+   */
   private patternBossFloor(ctx: CanvasRenderingContext2D, base: string, highlight: string, rune: string): void {
     this.patternFloor(ctx, base, highlight);
     ctx.strokeStyle = rune;
@@ -514,6 +633,12 @@ export class SpriteAtlas {
     ctx.fillRect(7, 7, 2, 2);
   }
 
+  /**
+   * Draws a generic floor tile pattern.
+   * @param ctx The canvas context.
+   * @param base The base color.
+   * @param highlight The highlight color.
+   */
   private patternFloor(ctx: CanvasRenderingContext2D, base: string, highlight: string): void {
     this.fill(ctx, base, highlight);
     ctx.fillStyle = highlight;
@@ -521,11 +646,23 @@ export class SpriteAtlas {
     ctx.fillRect(11, 11, 1, 1);
   }
 
+  /**
+   * Draws a stairs tile pattern with a glyph.
+   * @param ctx The canvas context.
+   * @param base The base color.
+   * @param glyph The glyph color.
+   */
   private patternStairs(ctx: CanvasRenderingContext2D, base: string, glyph: string): void {
     this.fill(ctx, base, '#1a2433');
     this.glyph(ctx, '>', glyph);
   }
 
+  /**
+   * Draws a glyph onto the tile.
+   * @param ctx The canvas context.
+   * @param g The glyph character.
+   * @param color The glyph color.
+   */
   private glyph(ctx: CanvasRenderingContext2D, g: string, color: string): void {
     ctx.clearRect(0, 0, this.tileSize, this.tileSize);
     ctx.font = '12px monospace';

@@ -22,30 +22,79 @@ export type Dungeon = {
   bossRoom?: { x: number; y: number; w: number; h: number; center: Point };
 };
 
+/**
+ * Converts 2D coordinates to a 1D index.
+ * @param x The x coordinate.
+ * @param y The y coordinate.
+ * @param width The grid width.
+ * @returns The 1D index.
+ */
 function idx(x: number, y: number, width: number): number {
   return y * width + x;
 }
 
+/**
+ * Checks whether a dungeon tile is walkable.
+ * @param tile The dungeon tile.
+ * @returns True if walkable.
+ */
 export function isDungeonWalkable(tile: DungeonTile): boolean {
   return tile === 'floor' || tile === 'bossFloor' || tile === 'stairsUp' || tile === 'stairsDown';
 }
 
+/**
+ * Checks whether a dungeon tile blocks line of sight.
+ * @param tile The dungeon tile.
+ * @returns True if opaque.
+ */
 export function isDungeonOpaque(tile: DungeonTile): boolean {
   return tile === 'wall';
 }
 
+/**
+ * Returns the dungeon tile at the given coordinate.
+ * @param dungeon The dungeon instance.
+ * @param x The x coordinate.
+ * @param y The y coordinate.
+ * @returns The dungeon tile.
+ */
 export function getDungeonTile(dungeon: Dungeon, x: number, y: number): DungeonTile {
   return dungeon.tiles[idx(x, y, dungeon.width)];
 }
 
+/**
+ * Returns the visibility state for a tile.
+ * @param dungeon The dungeon instance.
+ * @param x The x coordinate.
+ * @param y The y coordinate.
+ * @returns The visibility state.
+ */
 export function getVisibility(dungeon: Dungeon, x: number, y: number): TileVisibility {
   return dungeon.visibility[idx(x, y, dungeon.width)];
 }
 
+/**
+ * Sets the visibility state for a tile.
+ * @param dungeon The dungeon instance.
+ * @param x The x coordinate.
+ * @param y The y coordinate.
+ * @param v The visibility state to set.
+ */
 export function setVisibility(dungeon: Dungeon, x: number, y: number, v: TileVisibility): void {
   dungeon.visibility[idx(x, y, dungeon.width)] = v;
 }
 
+/**
+ * Generates a dungeon level with the requested layout.
+ * @param dungeonId The unique dungeon id.
+ * @param baseId The base id used across depths.
+ * @param depth The dungeon depth.
+ * @param seed The RNG seed.
+ * @param width The dungeon width.
+ * @param height The dungeon height.
+ * @param layout The layout style.
+ * @returns The generated dungeon.
+ */
 export function generateDungeon(
   dungeonId: string,
   baseId: string,
@@ -157,6 +206,16 @@ export function generateDungeon(
   return { id: dungeonId, baseId, depth, theme, width, height, tiles, visibility, stairsUp, stairsDown, bossRoom };
 }
 
+/**
+ * Generates a cave-style dungeon using cellular automata.
+ * @param dungeonId The unique dungeon id.
+ * @param baseId The base id used across depths.
+ * @param depth The dungeon depth.
+ * @param seed The RNG seed.
+ * @param width The dungeon width.
+ * @param height The dungeon height.
+ * @returns The generated dungeon.
+ */
 function generateCaveDungeon(dungeonId: string, baseId: string, depth: number, seed: number, width: number, height: number): Dungeon {
   const rng: Rng = new Rng(seed ^ 0x6d2b79f5);
 
@@ -234,6 +293,12 @@ function generateCaveDungeon(dungeonId: string, baseId: string, depth: number, s
   return { id: dungeonId, baseId, depth, theme, width, height, tiles, visibility, stairsUp, stairsDown, bossRoom: undefined };
 }
 
+/**
+ * Picks a random walkable floor point within the dungeon.
+ * @param dungeon The dungeon instance.
+ * @param seed The RNG seed.
+ * @returns A floor point.
+ */
 export function randomFloorPoint(dungeon: Dungeon, seed: number): Point {
   const rng: Rng = new Rng(seed);
   for (let i: number = 0; i < 2000; i++) {
@@ -247,6 +312,11 @@ export function randomFloorPoint(dungeon: Dungeon, seed: number): Point {
   return { x: dungeon.stairsDown.x, y: dungeon.stairsDown.y };
 }
 
+/**
+ * Selects a dungeon theme based on depth.
+ * @param depth The dungeon depth.
+ * @returns The chosen theme.
+ */
 function pickTheme(depth: number): DungeonTheme {
   if (depth < 3) {
     return 'ruins';

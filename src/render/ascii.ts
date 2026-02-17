@@ -16,6 +16,13 @@ export type RenderContext = {
   useFov: boolean;
 };
 
+/**
+ * Renders a top-down ASCII view of the current game state.
+ * @param ctx The render context.
+ * @param viewWidth The view width in tiles.
+ * @param viewHeight The view height in tiles.
+ * @returns The ASCII map string.
+ */
 export function renderAscii(ctx: RenderContext, viewWidth: number, viewHeight: number): string {
   const halfW: number = Math.floor(viewWidth / 2);
   const halfH: number = Math.floor(viewHeight / 2);
@@ -89,6 +96,13 @@ export function renderAscii(ctx: RenderContext, viewWidth: number, viewHeight: n
   return out;
 }
 
+/**
+ * Finds the glyph for an entity at a coordinate.
+ * @param ctx The render context.
+ * @param x The x coordinate.
+ * @param y The y coordinate.
+ * @returns The glyph character, or undefined.
+ */
 function findEntityChar(ctx: RenderContext, x: number, y: number): string | undefined {
   for (const e of ctx.entities) {
     if (e.kind !== 'monster') {
@@ -139,6 +153,13 @@ function findEntityChar(ctx: RenderContext, x: number, y: number): string | unde
   return undefined;
 }
 
+/**
+ * Finds the glyph for an item at a coordinate.
+ * @param ctx The render context.
+ * @param x The x coordinate.
+ * @param y The y coordinate.
+ * @returns The glyph character, or undefined.
+ */
 function findItemChar(ctx: RenderContext, x: number, y: number): string | undefined {
   for (const it of ctx.items) {
     if (!it.mapRef || !it.pos) {
@@ -185,6 +206,11 @@ function findItemChar(ctx: RenderContext, x: number, y: number): string | undefi
   return undefined;
 }
 
+/**
+ * Maps an item kind to a glyph character.
+ * @param kind The item kind.
+ * @returns The glyph character.
+ */
 function itemChar(kind: string): string {
   switch (kind) {
     case 'potion':
@@ -198,6 +224,11 @@ function itemChar(kind: string): string {
   }
 }
 
+/**
+ * Maps an overworld tile to a glyph character.
+ * @param tile The overworld tile.
+ * @returns The glyph character.
+ */
 function overworldChar(tile: string): string {
   switch (tile) {
     case 'water':
@@ -242,6 +273,11 @@ function overworldChar(tile: string): string {
   }
 }
 
+/**
+ * Maps a dungeon tile to a glyph character.
+ * @param tile The dungeon tile.
+ * @returns The glyph character.
+ */
 function dungeonChar(tile: string): string {
   switch (tile) {
     case 'wall':
@@ -259,6 +295,11 @@ function dungeonChar(tile: string): string {
   }
 }
 
+/**
+ * Maps a town tile to a glyph character.
+ * @param tile The town tile.
+ * @returns The glyph character.
+ */
 function townChar(tile: string): string {
   switch (tile) {
     case 'wall':
