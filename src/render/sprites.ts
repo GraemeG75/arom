@@ -101,7 +101,10 @@ const SPRITE_SHEET_TILES: readonly SheetEntry[] = [
   { key: 'dg_wall_crypt', x: 0, y: 64 },
   { key: 'dg_floor_crypt', x: 16, y: 64 },
   { key: 'dg_boss_floor_crypt', x: 32, y: 64 },
-  { key: 'dg_stairs_crypt', x: 48, y: 64 }
+  { key: 'dg_stairs_crypt', x: 48, y: 64 },
+  { key: 'it_potion', x: 0, y: 80 },
+  { key: 'it_weapon', x: 16, y: 80 },
+  { key: 'it_armor', x: 32, y: 80 }
 ] as const;
 
 /**
