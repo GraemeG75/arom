@@ -1,14 +1,29 @@
 export type Point = { x: number; y: number };
 
-export type Mode = 'overworld' | 'dungeon' | 'town';
+export enum Mode {
+  Overworld = 'overworld',
+  Dungeon = 'dungeon',
+  Town = 'town'
+}
 
-export type MapRef = { kind: 'overworld' } | { kind: 'dungeon'; dungeonId: string } | { kind: 'town'; townId: string };
+export type MapRef = { kind: Mode.Overworld } | { kind: Mode.Dungeon; dungeonId: string } | { kind: Mode.Town; townId: string };
 
-export type CharacterClass = 'warrior' | 'mage' | 'rogue';
+export enum CharacterClass {
+  Warrior = 'warrior',
+  Mage = 'mage',
+  Rogue = 'rogue'
+}
 
-export type Gender = 'female' | 'male' | 'nonbinary';
+export enum Gender {
+  Female = 'female',
+  Male = 'male',
+  Nonbinary = 'nonbinary'
+}
 
-export type EntityKind = 'player' | 'monster';
+export enum EntityKind {
+  Player = 'player',
+  Monster = 'monster'
+}
 
 export type Equipment = {
   weaponItemId?: string;
@@ -61,9 +76,19 @@ export type CharacterStory = {
   events: StoryEvent[];
 };
 
-export type GearRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+export enum GearRarity {
+  Common = 'common',
+  Uncommon = 'uncommon',
+  Rare = 'rare',
+  Epic = 'epic',
+  Legendary = 'legendary'
+}
 
-export type ItemKind = 'potion' | 'weapon' | 'armor';
+export enum ItemKind {
+  Potion = 'potion',
+  Weapon = 'weapon',
+  Armor = 'armor'
+}
 
 export type Item = {
   id: string;
@@ -97,52 +122,109 @@ export type Shop = {
 
 export type ShopEconomy = {
   moodLabel: string;
-  specialty: 'all' | 'potion' | 'weapon' | 'armor';
+  specialty: ShopSpecialty;
   buyMultiplier: number;
   sellMultiplier: number;
   featuredItemId?: string;
   restockIn: number;
 };
 
+export enum ShopSpecialty {
+  All = 'all',
+  Potion = 'potion',
+  Weapon = 'weapon',
+  Armor = 'armor'
+}
+
+export enum PanelMode {
+  None = 'none',
+  Inventory = 'inventory',
+  Shop = 'shop',
+  Quest = 'quest',
+  Story = 'story'
+}
+
 export type Action =
-  | { kind: 'move'; dx: number; dy: number }
-  | { kind: 'use' }
-  | { kind: 'wait' }
-  | { kind: 'pickup' }
-  | { kind: 'toggleInventory' }
-  | { kind: 'toggleShop' }
-  | { kind: 'toggleQuest' }
-  | { kind: 'toggleStory' }
-  | { kind: 'toggleMap' }
-  | { kind: 'cancelAuto' }
-  | { kind: 'toggleRenderer' }
-  | { kind: 'toggleFov' }
-  | { kind: 'help' }
-  | { kind: 'save' }
-  | { kind: 'load' };
+  | { kind: ActionKind.Move; dx: number; dy: number }
+  | { kind: ActionKind.Use }
+  | { kind: ActionKind.Wait }
+  | { kind: ActionKind.Pickup }
+  | { kind: ActionKind.ToggleInventory }
+  | { kind: ActionKind.ToggleShop }
+  | { kind: ActionKind.ToggleQuest }
+  | { kind: ActionKind.ToggleStory }
+  | { kind: ActionKind.ToggleMap }
+  | { kind: ActionKind.CancelAuto }
+  | { kind: ActionKind.ToggleRenderer }
+  | { kind: ActionKind.ToggleFov }
+  | { kind: ActionKind.Help }
+  | { kind: ActionKind.Save }
+  | { kind: ActionKind.Load };
 
-export type OverworldTile =
-  | 'water_deep'
-  | 'water'
-  | 'grass'
-  | 'forest'
-  | 'mountain'
-  | 'mountain_snow'
-  | 'cave'
-  | 'dungeon'
-  | 'town'
-  | 'town_shop'
-  | 'town_tavern'
-  | 'town_smith'
-  | 'town_house'
-  | 'road';
+export enum ActionKind {
+  Move = 'move',
+  Use = 'use',
+  Wait = 'wait',
+  Pickup = 'pickup',
+  ToggleInventory = 'toggleInventory',
+  ToggleShop = 'toggleShop',
+  ToggleQuest = 'toggleQuest',
+  ToggleStory = 'toggleStory',
+  ToggleMap = 'toggleMap',
+  CancelAuto = 'cancelAuto',
+  ToggleRenderer = 'toggleRenderer',
+  ToggleFov = 'toggleFov',
+  Help = 'help',
+  Save = 'save',
+  Load = 'load'
+}
 
-export type TownTile = 'wall' | 'floor' | 'road' | 'square' | 'gate' | 'shop' | 'tavern' | 'smith' | 'house';
-export type DungeonTile = 'wall' | 'floor' | 'bossFloor' | 'stairsUp' | 'stairsDown';
+export enum OverworldTile {
+  WaterDeep = 'water_deep',
+  Water = 'water',
+  Grass = 'grass',
+  Forest = 'forest',
+  Mountain = 'mountain',
+  MountainSnow = 'mountain_snow',
+  Cave = 'cave',
+  Dungeon = 'dungeon',
+  Town = 'town',
+  TownShop = 'town_shop',
+  TownTavern = 'town_tavern',
+  TownSmith = 'town_smith',
+  TownHouse = 'town_house',
+  Road = 'road'
+}
 
-export type TileVisibility = 'unseen' | 'seen' | 'visible';
+export enum TownTile {
+  Wall = 'wall',
+  Floor = 'floor',
+  Road = 'road',
+  Square = 'square',
+  Gate = 'gate',
+  Shop = 'shop',
+  Tavern = 'tavern',
+  Smith = 'smith',
+  House = 'house'
+}
 
-export type StatusEffectKind = 'poison';
+export enum DungeonTile {
+  Wall = 'wall',
+  Floor = 'floor',
+  BossFloor = 'bossFloor',
+  StairsUp = 'stairsUp',
+  StairsDown = 'stairsDown'
+}
+
+export enum TileVisibility {
+  Unseen = 'unseen',
+  Seen = 'seen',
+  Visible = 'visible'
+}
+
+export enum StatusEffectKind {
+  Poison = 'poison'
+}
 
 export type StatusEffect = {
   kind: StatusEffectKind;
@@ -150,7 +232,12 @@ export type StatusEffect = {
   potency: number;
 };
 
-export type QuestKind = 'killMonsters' | 'slayMonster' | 'reachDepth' | 'slayBoss';
+export enum QuestKind {
+  KillMonsters = 'killMonsters',
+  SlayMonster = 'slayMonster',
+  ReachDepth = 'reachDepth',
+  SlayBoss = 'slayBoss'
+}
 
 export type Quest = {
   id: string;

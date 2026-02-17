@@ -1,4 +1,4 @@
-import type { Entity, Item, Shop } from './types';
+import type { Entity, Item, Mode, PanelMode, Shop } from './types';
 import type { Dungeon } from '../maps/dungeon';
 
 export const SAVE_KEY: string = 'web-roguelike-starter-save-v3';
@@ -6,7 +6,7 @@ export const SAVE_KEY: string = 'web-roguelike-starter-save-v3';
 export type SaveDataV3 = {
   version: 3;
   worldSeed: number;
-  mode: 'overworld' | 'dungeon' | 'town';
+  mode: Mode;
 
   playerId: string;
   playerClass?: import('./types').CharacterClass;
@@ -28,7 +28,7 @@ export type SaveDataV3 = {
   quests: import('./types').Quest[];
 
   // UI state (optional)
-  activePanel: 'none' | 'inventory' | 'shop' | 'quest' | 'story';
+  activePanel: PanelMode;
 };
 
 /**

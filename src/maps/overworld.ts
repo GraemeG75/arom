@@ -1,5 +1,6 @@
 import { hash2D } from '../core/hash';
-import type { OverworldTile, Point } from '../core/types';
+import { OverworldTile } from '../core/types';
+import type { Point } from '../core/types';
 
 const TERRAIN_SALT: number = 0x51a1c0de;
 const FOREST_SALT: number = 0x1f2e3d4c;
@@ -61,28 +62,34 @@ export class Overworld {
     }
 
     // Roads are laid on traversable terrain to speed travel between features.
-    if (tile !== 'water' && tile !== 'water_deep' && tile !== 'mountain' && tile !== 'mountain_snow') {
+    if (tile !== OverworldTile.Water && tile !== OverworldTile.WaterDeep && tile !== OverworldTile.Mountain && tile !== OverworldTile.MountainSnow) {
       const roadNoise: number = this.sampleNoise(ROAD_SALT, x, y, ROAD_NOISE_FREQ);
       if (Math.abs(roadNoise - 0.5) < ROAD_BAND_WIDTH) {
-        tile = 'road';
+        tile = OverworldTile.Road;
       }
     }
 
     // Caves appear along mountain edges on walkable tiles.
-    if (tile !== 'water' && tile !== 'water_deep' && tile !== 'mountain' && tile !== 'mountain_snow') {
+    if (tile !== OverworldTile.Water && tile !== OverworldTile.WaterDeep && tile !== OverworldTile.Mountain && tile !== OverworldTile.MountainSnow) {
       if (this.isMountainAdjacent(x, y)) {
         const caveNoise: number = this.sampleFine(CAVE_SALT, x, y) % CAVE_PERIOD;
         if (caveNoise < CAVE_SPAWN_THRESHOLD) {
-          tile = 'cave';
+          tile = OverworldTile.Cave;
         }
       }
     }
 
     // Points of interest override base terrain but only spawn on walkable tiles.
-    if (tile !== 'water' && tile !== 'water_deep' && tile !== 'mountain' && tile !== 'mountain_snow' && tile !== 'cave') {
+    if (
+      tile !== OverworldTile.Water &&
+      tile !== OverworldTile.WaterDeep &&
+      tile !== OverworldTile.Mountain &&
+      tile !== OverworldTile.MountainSnow &&
+      tile !== OverworldTile.Cave
+    ) {
       const poiNoise: number = this.sampleFine(POI_SALT, x, y) % POI_PERIOD;
       if (poiNoise < DUNGEON_SPAWN_THRESHOLD) {
-        tile = 'dungeon';
+        tile = OverworldTile.Dungeon;
       }
     }
 
@@ -95,10 +102,10 @@ export class Overworld {
    * @returns True if walkable.
    */
   public isWalkable(tile: OverworldTile): boolean {
-    if (tile === 'water' || tile === 'water_deep') {
+    if (tile === OverworldTile.Water || tile === OverworldTile.WaterDeep) {
       return false;
     }
-    if (tile === 'mountain' || tile === 'mountain_snow') {
+    if (tile === OverworldTile.Mountain || tile === OverworldTile.MountainSnow) {
       return false;
     }
     return true;
@@ -110,19 +117,24 @@ export class Overworld {
    * @returns The movement cost.
    */
   public movementCost(tile: OverworldTile): number {
-    if (tile === 'road') {
+    if (tile === OverworldTile.Road) {
       return 1;
     }
-    if (tile === 'grass' || tile === 'town' || tile === 'dungeon' || tile === 'cave') {
+    if (tile === OverworldTile.Grass || tile === OverworldTile.Town || tile === OverworldTile.Dungeon || tile === OverworldTile.Cave) {
       return 1.4;
     }
-    if (tile === 'town_shop' || tile === 'town_tavern' || tile === 'town_smith' || tile === 'town_house') {
+    if (
+      tile === OverworldTile.TownShop ||
+      tile === OverworldTile.TownTavern ||
+      tile === OverworldTile.TownSmith ||
+      tile === OverworldTile.TownHouse
+    ) {
       return 1.4;
     }
-    if (tile === 'forest') {
+    if (tile === OverworldTile.Forest) {
       return 2.2;
     }
-    if (tile === 'mountain' || tile === 'mountain_snow' || tile === 'water' || tile === 'water_deep') {
+    if (tile === OverworldTile.Mountain || tile === OverworldTile.MountainSnow || tile === OverworldTile.Water || tile === OverworldTile.WaterDeep) {
       return Number.POSITIVE_INFINITY;
     }
     return 1.4;
@@ -147,19 +159,19 @@ export class Overworld {
   private baseTerrainAt(x: number, y: number): OverworldTile {
     const terrainValue: number = this.sampleOctave(TERRAIN_SALT, x, y, TERRAIN_PRIMARY_FREQ, TERRAIN_SECONDARY_FREQ, TERRAIN_SECONDARY_WEIGHT);
     if (terrainValue < WATER_DEEP_LEVEL) {
-      return 'water_deep';
+      return OverworldTile.WaterDeep;
     }
     if (terrainValue < WATER_LEVEL) {
-      return 'water';
+      return OverworldTile.Water;
     }
     if (terrainValue > MOUNTAIN_SNOW_LEVEL) {
-      return 'mountain_snow';
+      return OverworldTile.MountainSnow;
     }
     if (terrainValue > MOUNTAIN_LEVEL) {
-      return 'mountain';
+      return OverworldTile.Mountain;
     }
     const forestValue: number = this.sampleOctave(FOREST_SALT, x, y, FOREST_PRIMARY_FREQ, FOREST_SECONDARY_FREQ, FOREST_SECONDARY_WEIGHT);
-    return forestValue < FOREST_DENSITY ? 'forest' : 'grass';
+    return forestValue < FOREST_DENSITY ? OverworldTile.Forest : OverworldTile.Grass;
   }
 
   /**
@@ -178,7 +190,7 @@ export class Overworld {
 
     for (const n of neighbors) {
       const base: OverworldTile = this.baseTerrainAt(n.x, n.y);
-      if (base === 'mountain' || base === 'mountain_snow') {
+      if (base === OverworldTile.Mountain || base === OverworldTile.MountainSnow) {
         return true;
       }
     }
@@ -201,7 +213,12 @@ export class Overworld {
           continue;
         }
         const base: OverworldTile = this.baseTerrainAt(cx, cy);
-        if (base === 'water' || base === 'water_deep' || base === 'mountain' || base === 'mountain_snow') {
+        if (
+          base === OverworldTile.Water ||
+          base === OverworldTile.WaterDeep ||
+          base === OverworldTile.Mountain ||
+          base === OverworldTile.MountainSnow
+        ) {
           continue;
         }
         return { x: cx, y: cy };
@@ -277,13 +294,13 @@ export class Overworld {
   private townBuildingSet(variant: number): OverworldTile[] {
     switch (variant % 4) {
       case 1:
-        return ['town_tavern', 'town_shop', 'town_house', 'town_smith'];
+        return [OverworldTile.TownTavern, OverworldTile.TownShop, OverworldTile.TownHouse, OverworldTile.TownSmith];
       case 2:
-        return ['town_smith', 'town_house', 'town_shop', 'town_tavern'];
+        return [OverworldTile.TownSmith, OverworldTile.TownHouse, OverworldTile.TownShop, OverworldTile.TownTavern];
       case 3:
-        return ['town_house', 'town_smith', 'town_tavern', 'town_shop'];
+        return [OverworldTile.TownHouse, OverworldTile.TownSmith, OverworldTile.TownTavern, OverworldTile.TownShop];
       default:
-        return ['town_shop', 'town_tavern', 'town_smith', 'town_house'];
+        return [OverworldTile.TownShop, OverworldTile.TownTavern, OverworldTile.TownSmith, OverworldTile.TownHouse];
     }
   }
 

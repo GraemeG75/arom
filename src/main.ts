@@ -1,4 +1,21 @@
-import type { Action, CharacterClass, CharacterStory, Entity, Gender, GearRarity, Item, Mode, Point, Shop } from './core/types';
+import {
+  CharacterClass,
+  DungeonTile,
+  GearRarity,
+  ItemKind,
+  Mode,
+  PanelMode,
+  ShopSpecialty,
+  TownTile,
+  type Action,
+  type CharacterStory,
+  type Entity,
+  type Gender,
+  type Item,
+  type Point,
+  type Shop,
+  type ShopEconomy
+} from './core/types';
 import { Rng } from './core/rng';
 import { add, manhattan } from './core/util';
 import {
@@ -21,7 +38,7 @@ import { nextMonsterStep } from './systems/ai';
 import { PixiRenderer } from './render/pixi';
 import { MessageLog } from './ui/log';
 import { loadFromBase62String, loadFromLocalStorage, saveToLocalStorage, serializeSaveDataBase62, type SaveDataV3 } from './core/save';
-import { renderPanelHtml, type PanelMode } from './ui/panel';
+import { renderPanelHtml } from './ui/panel';
 import { aStar } from './systems/astar';
 import { hash2D } from './core/hash';
 import { t } from './i18n';
@@ -61,7 +78,7 @@ type GameState = {
   useFov: boolean;
 
   activePanel: PanelMode;
-  shopCategory: 'all' | 'potion' | 'weapon' | 'armor';
+  shopCategory: ShopSpecialty;
 
   turnCounter: number;
   quests: import('./core/types').Quest[];
@@ -247,7 +264,7 @@ type RarityConfig = {
 
 const RARITY_CONFIGS: readonly RarityConfig[] = [
   {
-    key: 'common',
+    key: GearRarity.Common,
     label: t('rarity.common.label'),
     namePrefix: '',
     attackBonus: 0,
@@ -261,7 +278,7 @@ const RARITY_CONFIGS: readonly RarityConfig[] = [
     depthWeight: 0
   },
   {
-    key: 'uncommon',
+    key: GearRarity.Uncommon,
     label: t('rarity.uncommon.label'),
     namePrefix: t('rarity.uncommon.prefix'),
     attackBonus: 1,
@@ -275,7 +292,7 @@ const RARITY_CONFIGS: readonly RarityConfig[] = [
     depthWeight: 3
   },
   {
-    key: 'rare',
+    key: GearRarity.Rare,
     label: t('rarity.rare.label'),
     namePrefix: t('rarity.rare.prefix'),
     attackBonus: 2,
@@ -289,7 +306,7 @@ const RARITY_CONFIGS: readonly RarityConfig[] = [
     depthWeight: 4
   },
   {
-    key: 'epic',
+    key: GearRarity.Epic,
     label: t('rarity.epic.label'),
     namePrefix: t('rarity.epic.prefix'),
     attackBonus: 3,
@@ -303,7 +320,7 @@ const RARITY_CONFIGS: readonly RarityConfig[] = [
     depthWeight: 3
   },
   {
-    key: 'legendary',
+    key: GearRarity.Legendary,
     label: t('rarity.legendary.label'),
     namePrefix: t('rarity.legendary.prefix'),
     attackBonus: 4,
@@ -334,7 +351,7 @@ const SHOP_RESTOCK_INTERVAL: number = 80;
  * @param shop The shop instance.
  * @returns The shop economy.
  */
-function getShopEconomy(s: GameState, shop: Shop): import('./core/types').ShopEconomy {
+function getShopEconomy(s: GameState, shop: Shop): ShopEconomy {
   const cycle: number = Math.floor(s.turnCounter / SHOP_RESTOCK_INTERVAL);
   const seed: number = hash2D(s.worldSeed, shop.townWorldPos.x, shop.townWorldPos.y) ^ (cycle * 0x9e3779b9) ^ 0x5f10;
   const rng: Rng = new Rng(seed);
@@ -354,10 +371,11 @@ function getShopEconomy(s: GameState, shop: Shop): import('./core/types').ShopEc
     sellMultiplier = 0.45;
   }
 
-  let specialty: 'all' | 'potion' | 'weapon' | 'armor' = 'all';
+  let specialty: ShopSpecialty = ShopSpecialty.All;
   const specialtyRoll: number = rng.nextInt(0, 100);
   if (specialtyRoll >= 40) {
-    specialty = rng.nextInt(0, 3) === 0 ? 'potion' : rng.nextInt(0, 2) === 0 ? 'weapon' : 'armor';
+    const roll: number = rng.nextInt(0, 3);
+    specialty = roll === 0 ? ShopSpecialty.Potion : roll === 1 ? ShopSpecialty.Weapon : ShopSpecialty.Armor;
   }
 
   const featuredItemId: string | undefined = getFeaturedShopItemId(shop, rng);
@@ -386,23 +404,38 @@ function getFeaturedShopItemId(shop: Shop, rng: Rng): string | undefined {
   return ids[idx];
 }
 
+function specialtyMatchesItem(specialty: ShopSpecialty, kind: ItemKind): boolean {
+  switch (specialty) {
+    case ShopSpecialty.All:
+      return true;
+    case ShopSpecialty.Potion:
+      return kind === ItemKind.Potion;
+    case ShopSpecialty.Weapon:
+      return kind === ItemKind.Weapon;
+    case ShopSpecialty.Armor:
+      return kind === ItemKind.Armor;
+    default:
+      return false;
+  }
+}
+
 /**
  * Returns the price multiplier for an item's rarity.
  * @param item The item.
  * @returns The price multiplier.
  */
 function getRarityPriceMultiplier(item: Item): number {
-  const rarity: GearRarity = item.rarity ?? 'common';
+  const rarity: GearRarity = item.rarity ?? GearRarity.Common;
   switch (rarity) {
-    case 'uncommon':
+    case GearRarity.Uncommon:
       return 1.03;
-    case 'rare':
+    case GearRarity.Rare:
       return 1.06;
-    case 'epic':
+    case GearRarity.Epic:
       return 1.1;
-    case 'legendary':
+    case GearRarity.Legendary:
       return 1.15;
-    case 'common':
+    case GearRarity.Common:
     default:
       return 1;
   }
@@ -415,10 +448,10 @@ function getRarityPriceMultiplier(item: Item): number {
  * @param economy The shop economy.
  * @returns The buy price.
  */
-function getShopBuyPrice(shop: Shop, item: Item, economy: import('./core/types').ShopEconomy): number {
+function getShopBuyPrice(shop: Shop, item: Item, economy: ShopEconomy): number {
   let multiplier: number = economy.buyMultiplier;
-  if (economy.specialty !== 'all') {
-    multiplier += item.kind === economy.specialty ? -0.08 : 0.04;
+  if (economy.specialty !== ShopSpecialty.All) {
+    multiplier += specialtyMatchesItem(economy.specialty, item.kind) ? -0.08 : 0.04;
   }
   if (economy.featuredItemId && economy.featuredItemId === item.id) {
     multiplier *= 0.8;
@@ -434,10 +467,10 @@ function getShopBuyPrice(shop: Shop, item: Item, economy: import('./core/types')
  * @param economy The shop economy.
  * @returns The sell price.
  */
-function getShopSellPrice(shop: Shop, item: Item, economy: import('./core/types').ShopEconomy): number {
+function getShopSellPrice(shop: Shop, item: Item, economy: ShopEconomy): number {
   let multiplier: number = economy.sellMultiplier;
-  if (economy.specialty !== 'all') {
-    multiplier += item.kind === economy.specialty ? 0.03 : -0.02;
+  if (economy.specialty !== ShopSpecialty.All) {
+    multiplier += specialtyMatchesItem(economy.specialty, item.kind) ? 0.03 : -0.02;
   }
   multiplier *= getRarityPriceMultiplier(item);
   return Math.max(1, Math.round(item.value * multiplier));
@@ -449,11 +482,8 @@ function getShopSellPrice(shop: Shop, item: Item, economy: import('./core/types'
  * @param shop The shop instance.
  * @returns The pricing data.
  */
-function buildShopPricing(
-  s: GameState,
-  shop: Shop
-): { economy: import('./core/types').ShopEconomy; buyPrices: Record<string, number>; sellPrices: Record<string, number> } {
-  const economy: import('./core/types').ShopEconomy = getShopEconomy(s, shop);
+function buildShopPricing(s: GameState, shop: Shop): { economy: ShopEconomy; buyPrices: Record<string, number>; sellPrices: Record<string, number> } {
+  const economy: ShopEconomy = getShopEconomy(s, shop);
   const buyPrices: Record<string, number> = {};
   const sellPrices: Record<string, number> = {};
 
@@ -667,7 +697,7 @@ function generateWeaponLoot(id: string, power: number, rng: Rng): Item {
   const value: number = Math.max(1, Math.round((16 + attackBonus * 9) * rarity.valueMultiplier));
   const nameBase: string = buildItemName(prefix?.name, base.noun, suffix?.name);
   const name: string = `${rarity.namePrefix ? `${rarity.namePrefix} ` : ''}${nameBase}`.trim();
-  return { id, kind: 'weapon', name, attackBonus, value, rarity: rarity.key, critChance, lifesteal };
+  return { id, kind: ItemKind.Weapon, name, attackBonus, value, rarity: rarity.key, critChance, lifesteal };
 }
 
 /**
@@ -691,7 +721,7 @@ function generateArmorLoot(id: string, power: number, rng: Rng): Item {
   const value: number = Math.max(1, Math.round((14 + defenseBonus * 8) * rarity.valueMultiplier));
   const nameBase: string = buildItemName(prefix?.name, base.noun, suffix?.name);
   const name: string = `${rarity.namePrefix ? `${rarity.namePrefix} ` : ''}${nameBase}`.trim();
-  return { id, kind: 'armor', name, defenseBonus, value, rarity: rarity.key, dodgeChance, thorns };
+  return { id, kind: ItemKind.Armor, name, defenseBonus, value, rarity: rarity.key, dodgeChance, thorns };
 }
 
 /**
@@ -706,16 +736,16 @@ function generateArmorLoot(id: string, power: number, rng: Rng): Item {
  */
 function createGearItem(
   id: string,
-  slot: 'weapon' | 'armor',
+  slot: ItemKind.Weapon | ItemKind.Armor,
   spec: GearSpec,
   attackBonus: number | undefined,
   defenseBonus: number | undefined,
   value: number
 ): Item {
-  if (slot === 'weapon') {
-    return { id, kind: 'weapon', name: spec.name, attackBonus: attackBonus ?? spec.attackBonus ?? 0, value, rarity: 'common' };
+  if (slot === ItemKind.Weapon) {
+    return { id, kind: ItemKind.Weapon, name: spec.name, attackBonus: attackBonus ?? spec.attackBonus ?? 0, value, rarity: GearRarity.Common };
   }
-  return { id, kind: 'armor', name: spec.name, defenseBonus: defenseBonus ?? spec.defenseBonus ?? 0, value, rarity: 'common' };
+  return { id, kind: ItemKind.Armor, name: spec.name, defenseBonus: defenseBonus ?? spec.defenseBonus ?? 0, value, rarity: GearRarity.Common };
 }
 
 /**
@@ -740,7 +770,7 @@ function ensureStartingGear(state: GameState, classType: CharacterClass): void {
   if (!state.player.equipment.weaponItemId || !hasWeaponItem) {
     const weapon: Item = hasWeaponItem
       ? (state.items.find((it) => it.id === weaponId) as Item)
-      : createGearItem(weaponId, 'weapon', gear.weapon, gear.weapon.attackBonus, undefined, gear.weapon.value);
+      : createGearItem(weaponId, ItemKind.Weapon, gear.weapon, gear.weapon.attackBonus, undefined, gear.weapon.value);
 
     if (!hasWeaponItem) {
       state.items.push(weapon);
@@ -755,7 +785,7 @@ function ensureStartingGear(state: GameState, classType: CharacterClass): void {
   if (!state.player.equipment.armorItemId || !hasArmorItem) {
     const armor: Item = hasArmorItem
       ? (state.items.find((it) => it.id === armorId) as Item)
-      : createGearItem(armorId, 'armor', gear.armor, undefined, gear.armor.defenseBonus, gear.armor.value);
+      : createGearItem(armorId, ItemKind.Armor, gear.armor, undefined, gear.armor.defenseBonus, gear.armor.value);
 
     if (!hasArmorItem) {
       state.items.push(armor);
@@ -781,13 +811,13 @@ function ensureStartingGear(state: GameState, classType: CharacterClass): void {
  * @param rng The RNG.
  * @returns The upgrade item.
  */
-function createClassUpgradeItem(classType: CharacterClass, slot: 'weapon' | 'armor', id: string, upgradeLevel: number, rng: Rng): Item {
+function createClassUpgradeItem(classType: CharacterClass, slot: ItemKind.Weapon | ItemKind.Armor, id: string, upgradeLevel: number, rng: Rng): Item {
   const gear: ClassGearConfig = CLASS_GEAR[classType];
-  const spec: GearSpec = slot === 'weapon' ? gear.weapon : gear.armor;
+  const spec: GearSpec = slot === ItemKind.Weapon ? gear.weapon : gear.armor;
   const level: number = Math.max(1, upgradeLevel);
   const rarity: RarityConfig = rollRarity(level, rng);
 
-  if (slot === 'weapon') {
+  if (slot === ItemKind.Weapon) {
     const baseAttack: number = spec.attackBonus ?? 0;
     const attackBonus: number = baseAttack + level + rarity.attackBonus;
     const nameBase: string = `${spec.upgradeName} +${attackBonus - baseAttack}`;
@@ -796,7 +826,7 @@ function createClassUpgradeItem(classType: CharacterClass, slot: 'weapon' | 'arm
     const value: number = Math.max(1, Math.round(baseValue * rarity.valueMultiplier));
     const critChance: number = rarity.weaponCritChance;
     const lifesteal: number = rarity.weaponLifesteal;
-    return { id, kind: 'weapon', name, attackBonus, value, rarity: rarity.key, critChance, lifesteal };
+    return { id, kind: ItemKind.Weapon, name, attackBonus, value, rarity: rarity.key, critChance, lifesteal };
   }
 
   const baseDefense: number = spec.defenseBonus ?? 0;
@@ -808,7 +838,7 @@ function createClassUpgradeItem(classType: CharacterClass, slot: 'weapon' | 'arm
   const value: number = Math.max(1, Math.round(baseValue * rarity.valueMultiplier));
   const dodgeChance: number = rarity.armorDodgeChance;
   const thorns: number = rarity.armorThorns;
-  return { id, kind: 'armor', name, defenseBonus, value, rarity: rarity.key, dodgeChance, thorns };
+  return { id, kind: ItemKind.Armor, name, defenseBonus, value, rarity: rarity.key, dodgeChance, thorns };
 }
 
 const asciiEl: HTMLElement = document.getElementById('ascii')!;
@@ -1037,7 +1067,7 @@ function newGame(worldSeed: number, classChoice: CharacterClass, gender: Gender,
     name,
     glyph: '@',
     pos: findStartPosition(overworld, rng),
-    mapRef: { kind: 'overworld' },
+    mapRef: { kind: Mode.Overworld },
     hp: cfg.maxHp,
     maxHp: cfg.maxHp,
     baseAttack: cfg.baseAttack,
@@ -1058,7 +1088,7 @@ function newGame(worldSeed: number, classChoice: CharacterClass, gender: Gender,
   const state: GameState = {
     worldSeed,
     rng,
-    mode: 'overworld',
+    mode: Mode.Overworld,
     overworld,
     dungeons: new Map<string, Dungeon>(),
     dungeonStack: [],
@@ -1073,8 +1103,8 @@ function newGame(worldSeed: number, classChoice: CharacterClass, gender: Gender,
     shops: new Map<string, Shop>(),
     rendererMode: 'isometric',
     useFov: true,
-    activePanel: 'none',
-    shopCategory: 'all',
+    activePanel: PanelMode.None,
+    shopCategory: ShopSpecialty.All,
     turnCounter: 0,
     quests: [],
     mapOpen: false,
@@ -1179,7 +1209,7 @@ function startNewRun(classChoice: CharacterClass): void {
  * @returns The current dungeon, or undefined.
  */
 function getCurrentDungeon(s: GameState): Dungeon | undefined {
-  if (s.player.mapRef.kind !== 'dungeon') {
+  if (s.player.mapRef.kind !== Mode.Dungeon) {
     return undefined;
   }
   return s.dungeons.get(s.player.mapRef.dungeonId);
@@ -1191,7 +1221,7 @@ function getCurrentDungeon(s: GameState): Dungeon | undefined {
  * @returns The current town, or undefined.
  */
 function getCurrentTown(s: GameState): Town | undefined {
-  if (s.player.mapRef.kind !== 'town') {
+  if (s.player.mapRef.kind !== Mode.Town) {
     return undefined;
   }
   return s.towns.get(s.player.mapRef.townId);
@@ -1289,7 +1319,7 @@ function createMonsterForDepth(depth: number, roll: number, rng: Rng, dungeonId:
       name: monsterName('slime'),
       glyph: 's',
       pos: p,
-      mapRef: { kind: 'dungeon', dungeonId },
+      mapRef: { kind: Mode.Dungeon, dungeonId },
       hp: 4 + depth,
       maxHp: 4 + depth,
       baseAttack: 1 + Math.floor(depth / 2),
@@ -1309,7 +1339,7 @@ function createMonsterForDepth(depth: number, roll: number, rng: Rng, dungeonId:
       name: monsterName('goblin'),
       glyph: 'g',
       pos: p,
-      mapRef: { kind: 'dungeon', dungeonId },
+      mapRef: { kind: Mode.Dungeon, dungeonId },
       hp: 6 + depth * 2,
       maxHp: 6 + depth * 2,
       baseAttack: 2 + depth,
@@ -1329,7 +1359,7 @@ function createMonsterForDepth(depth: number, roll: number, rng: Rng, dungeonId:
       name: monsterName('wraith'),
       glyph: 'w',
       pos: p,
-      mapRef: { kind: 'dungeon', dungeonId },
+      mapRef: { kind: Mode.Dungeon, dungeonId },
       hp: 7 + depth * 2,
       maxHp: 7 + depth * 2,
       baseAttack: 2 + depth,
@@ -1350,7 +1380,7 @@ function createMonsterForDepth(depth: number, roll: number, rng: Rng, dungeonId:
     name: monsterName('orc'),
     glyph: 'O',
     pos: p,
-    mapRef: { kind: 'dungeon', dungeonId },
+    mapRef: { kind: Mode.Dungeon, dungeonId },
     hp: 10 + depth * 3,
     maxHp: 10 + depth * 3,
     baseAttack: 3 + depth,
@@ -1406,7 +1436,7 @@ function spawnBossInDungeon(s: GameState, dungeon: Dungeon, seed: number): void 
   if (dungeon.depth < BOSS_MIN_DEPTH) {
     return;
   }
-  if (s.entities.some((e) => e.isBoss && e.mapRef.kind === 'dungeon' && e.mapRef.dungeonId === dungeon.id)) {
+  if (s.entities.some((e) => e.isBoss && e.mapRef.kind === Mode.Dungeon && e.mapRef.dungeonId === dungeon.id)) {
     return;
   }
 
@@ -1420,7 +1450,7 @@ function spawnBossInDungeon(s: GameState, dungeon: Dungeon, seed: number): void 
     name,
     glyph: 'B',
     pos: p,
-    mapRef: { kind: 'dungeon', dungeonId: dungeon.id },
+    mapRef: { kind: Mode.Dungeon, dungeonId: dungeon.id },
     hp,
     maxHp: hp,
     baseAttack: 5 + dungeon.depth * 2,
@@ -1456,7 +1486,7 @@ function spawnLootInDungeon(s: GameState, dungeon: Dungeon, seed: number): void 
     if (roll < 55) {
       item = {
         id: baseId,
-        kind: 'potion',
+        kind: ItemKind.Potion,
         name: dungeon.depth >= 4 ? t('item.potion.greater') : t('item.potion.healing'),
         healAmount: 8 + dungeon.depth * 2,
         value: 10 + dungeon.depth * 2
@@ -1468,13 +1498,13 @@ function spawnLootInDungeon(s: GameState, dungeon: Dungeon, seed: number): void 
       const power: number = Math.max(1, dungeon.depth + rng.nextInt(0, 2));
       item = generateArmorLoot(`${baseId}_a`, power, rng);
     } else {
-      const slot: 'weapon' | 'armor' = rng.nextInt(0, 2) === 0 ? 'weapon' : 'armor';
+      const slot: ItemKind.Weapon | ItemKind.Armor = rng.nextInt(0, 2) === 0 ? ItemKind.Weapon : ItemKind.Armor;
       const upgradeId: string = `${baseId}_class_${slot}`;
       const upgradeLevel: number = Math.max(1, Math.floor(dungeon.depth / 2) + 1);
       item = createClassUpgradeItem(s.playerClass, slot, upgradeId, upgradeLevel, rng);
     }
 
-    item.mapRef = { kind: 'dungeon', dungeonId: dungeon.id };
+    item.mapRef = { kind: Mode.Dungeon, dungeonId: dungeon.id };
     item.pos = p;
     s.items.push(item);
   }
@@ -1485,10 +1515,10 @@ function spawnLootInDungeon(s: GameState, dungeon: Dungeon, seed: number): void 
  * @returns The town id, or undefined.
  */
 function getActiveTownId(): string | undefined {
-  if (state.mode === 'town') {
+  if (state.mode === Mode.Town) {
     return state.currentTownId;
   }
-  if (state.mode !== 'overworld') {
+  if (state.mode !== Mode.Overworld) {
     return undefined;
   }
   const tile = state.overworld.getTile(state.player.pos.x, state.player.pos.y);
@@ -1669,13 +1699,13 @@ function maybeCreateQuestRewards(s: GameState, rng: Rng, questId: string, power:
 function createBossQuestRewards(s: GameState, rng: Rng, questId: string, power: number, bossName: string): string[] {
   const weaponId: string = `${questId}_reward_boss_w`;
   if (!s.items.some((it) => it.id === weaponId)) {
-    const item: Item = createBossRelicItem(rng, weaponId, 'weapon', power, bossName);
+    const item: Item = createBossRelicItem(rng, weaponId, ItemKind.Weapon, power, bossName);
     s.items.push(item);
   }
 
   const armorId: string = `${questId}_reward_boss_a`;
   if (!s.items.some((it) => it.id === armorId)) {
-    const item: Item = createBossRelicItem(rng, armorId, 'armor', power, bossName);
+    const item: Item = createBossRelicItem(rng, armorId, ItemKind.Armor, power, bossName);
     s.items.push(item);
   }
 
@@ -1691,10 +1721,10 @@ function createBossQuestRewards(s: GameState, rng: Rng, questId: string, power: 
  * @param bossName The boss name.
  * @returns The relic item.
  */
-function createBossRelicItem(rng: Rng, id: string, slot: 'weapon' | 'armor', power: number, bossName: string): Item {
-  if (slot === 'weapon') {
+function createBossRelicItem(rng: Rng, id: string, slot: ItemKind.Weapon | ItemKind.Armor, power: number, bossName: string): Item {
+  if (slot === ItemKind.Weapon) {
     const item: Item = generateWeaponLoot(id, Math.max(1, power), rng);
-    item.rarity = 'legendary';
+    item.rarity = GearRarity.Legendary;
     item.attackBonus = (item.attackBonus ?? 0) + 3;
     item.value = Math.round(item.value * 2.4);
     item.name = t('item.relic.blade', { bossName });
@@ -1702,7 +1732,7 @@ function createBossRelicItem(rng: Rng, id: string, slot: 'weapon' | 'armor', pow
   }
 
   const item: Item = generateArmorLoot(id, Math.max(1, power), rng);
-  item.rarity = 'legendary';
+  item.rarity = GearRarity.Legendary;
   item.defenseBonus = (item.defenseBonus ?? 0) + 2;
   item.value = Math.round(item.value * 2.4);
   item.name = t('item.relic.aegis', { bossName });
@@ -1715,7 +1745,7 @@ function createBossRelicItem(rng: Rng, id: string, slot: 'weapon' | 'armor', pow
  * @param boss The boss entity.
  */
 function dropBossLoot(s: GameState, boss: Entity): void {
-  if (!boss.isBoss || boss.mapRef.kind !== 'dungeon') {
+  if (!boss.isBoss || boss.mapRef.kind !== Mode.Dungeon) {
     return;
   }
   const dungeon: Dungeon | undefined = s.dungeons.get(boss.mapRef.dungeonId);
@@ -1730,9 +1760,9 @@ function dropBossLoot(s: GameState, boss: Entity): void {
 
   const seed: number = hash2D(s.worldSeed ^ dungeon.depth, boss.pos.x, boss.pos.y) ^ 0xb055;
   const rng: Rng = new Rng(seed);
-  const slot: 'weapon' | 'armor' = rng.nextInt(0, 2) === 0 ? 'weapon' : 'armor';
+  const slot: ItemKind.Weapon | ItemKind.Armor = rng.nextInt(0, 2) === 0 ? ItemKind.Weapon : ItemKind.Armor;
   const item: Item = createBossRelicItem(rng, id, slot, dungeon.depth + 4, boss.name);
-  item.mapRef = { kind: 'dungeon', dungeonId: dungeon.id };
+  item.mapRef = { kind: Mode.Dungeon, dungeonId: dungeon.id };
   item.pos = { x: boss.pos.x, y: boss.pos.y };
   s.items.push(item);
   s.log.push(t('log.boss.drop', { boss: boss.name, item: item.name }));
@@ -1772,7 +1802,7 @@ function createQuestRewardItem(s: GameState, rng: Rng, questId: string, power: n
       const healAmount: number = 8 + power * 2;
       const item: Item = {
         id,
-        kind: 'potion',
+        kind: ItemKind.Potion,
         name: power >= 4 ? t('item.potion.greater') : t('item.potion.healing'),
         healAmount,
         value: 10 + power * 2
@@ -1941,7 +1971,7 @@ function maybeRestockShop(s: GameState, shop: Shop): void {
 
     let item: Item;
     if (roll < 45) {
-      item = { id: itemId, kind: 'potion', name: t('item.potion.healing'), healAmount: 10, value: 14 };
+      item = { id: itemId, kind: ItemKind.Potion, name: t('item.potion.healing'), healAmount: 10, value: 14 };
     } else if (roll < 75) {
       const power: number = tierLevel + rng.nextInt(0, 2);
       item = generateWeaponLoot(itemId, power, rng);
@@ -1978,14 +2008,14 @@ function addClassGearToShop(s: GameState, shopId: string, stock: string[], tier:
 
   const weaponId: string = `shop_${shopId}_class_weapon_${tier}`;
   if (!existingIds.has(weaponId) && !s.items.some((it) => it.id === weaponId)) {
-    const item: Item = createClassUpgradeItem(s.playerClass, 'weapon', weaponId, upgradeLevel, rng);
+    const item: Item = createClassUpgradeItem(s.playerClass, ItemKind.Weapon, weaponId, upgradeLevel, rng);
     s.items.push(item);
     stock.push(weaponId);
   }
 
   const armorId: string = `shop_${shopId}_class_armor_${tier}`;
   if (!existingIds.has(armorId) && !s.items.some((it) => it.id === armorId)) {
-    const item: Item = createClassUpgradeItem(s.playerClass, 'armor', armorId, upgradeLevel, rng);
+    const item: Item = createClassUpgradeItem(s.playerClass, ItemKind.Armor, armorId, upgradeLevel, rng);
     s.items.push(item);
     stock.push(armorId);
   }
@@ -2017,7 +2047,7 @@ function ensureShopForTown(s: GameState, townPos: Point): Shop {
     let item: Item;
 
     if (roll < 45) {
-      item = { id: itemId, kind: 'potion', name: t('item.potion.healing'), healAmount: 10, value: 14 };
+      item = { id: itemId, kind: ItemKind.Potion, name: t('item.potion.healing'), healAmount: 10, value: 14 };
     } else if (roll < 75) {
       const power: number = 1 + rng.nextInt(0, 2);
       item = generateWeaponLoot(itemId, power, rng);
@@ -2043,15 +2073,15 @@ function ensureShopForTown(s: GameState, townPos: Point): Shop {
  * @returns True when in town.
  */
 function isStandingOnTown(): boolean {
-  return state.mode === 'town';
+  return state.mode === Mode.Town;
 }
 
 /**
  * Returns the town tile at the player position.
  * @returns The town tile, or undefined.
  */
-function getTownTileAtPlayer(): import('./core/types').TownTile | undefined {
-  if (state.mode !== 'town') {
+function getTownTileAtPlayer(): TownTile | undefined {
+  if (state.mode !== Mode.Town) {
     return undefined;
   }
   const town: Town | undefined = getCurrentTown(state);
@@ -2066,7 +2096,7 @@ function getTownTileAtPlayer(): import('./core/types').TownTile | undefined {
  * @returns True if near the gate.
  */
 function isAtOrNearTownGate(): boolean {
-  if (state.mode !== 'town') {
+  if (state.mode !== Mode.Town) {
     return false;
   }
   const town: Town | undefined = getCurrentTown(state);
@@ -2075,8 +2105,8 @@ function isAtOrNearTownGate(): boolean {
   }
   const px: number = state.player.pos.x;
   const py: number = state.player.pos.y;
-  const current: import('./core/types').TownTile = getTownTile(town, px, py);
-  if (current === 'gate' || current === 'road') {
+  const current: TownTile = getTownTile(town, px, py);
+  if (current === TownTile.Gate || current === TownTile.Road) {
     return true;
   }
   const neighbors: Point[] = [
@@ -2089,7 +2119,7 @@ function isAtOrNearTownGate(): boolean {
     if (n.x < 0 || n.y < 0 || n.x >= town.width || n.y >= town.height) {
       continue;
     }
-    if (getTownTile(town, n.x, n.y) === 'gate') {
+    if (getTownTile(town, n.x, n.y) === TownTile.Gate) {
       return true;
     }
   }
@@ -2101,7 +2131,7 @@ function isAtOrNearTownGate(): boolean {
  * @returns True if a shop is available.
  */
 function canOpenShopHere(): boolean {
-  return state.mode === 'town' && getTownTileAtPlayer() === 'shop';
+  return state.mode === Mode.Town && getTownTileAtPlayer() === TownTile.Shop;
 }
 
 /**
@@ -2109,7 +2139,7 @@ function canOpenShopHere(): boolean {
  * @returns True if a quest is available.
  */
 function canOpenQuestHere(): boolean {
-  return state.mode === 'town' && getTownTileAtPlayer() === 'tavern';
+  return state.mode === Mode.Town && getTownTileAtPlayer() === TownTile.Tavern;
 }
 
 /**
@@ -2117,10 +2147,10 @@ function canOpenQuestHere(): boolean {
  * @returns The town world position, or undefined.
  */
 function getActiveTownWorldPos(): Point | undefined {
-  if (state.mode === 'town') {
+  if (state.mode === Mode.Town) {
     return state.townReturnPos;
   }
-  if (state.mode !== 'overworld') {
+  if (state.mode !== Mode.Overworld) {
     return undefined;
   }
   const tile = state.overworld.getTile(state.player.pos.x, state.player.pos.y);
@@ -2135,7 +2165,7 @@ function getActiveTownWorldPos(): Point | undefined {
  * @returns The entrance kind, or undefined.
  */
 function getOverworldEntranceKind(): 'dungeon' | 'cave' | undefined {
-  if (state.mode !== 'overworld') {
+  if (state.mode !== Mode.Overworld) {
     return undefined;
   }
   const tile = state.overworld.getTile(state.player.pos.x, state.player.pos.y);
@@ -2161,7 +2191,7 @@ function isStandingOnDungeonEntrance(): boolean {
  * @returns True if at a town building.
  */
 function isStandingOnTownBuilding(): boolean {
-  if (state.mode !== 'overworld') {
+  if (state.mode !== Mode.Overworld) {
     return false;
   }
   const tile = state.overworld.getTile(state.player.pos.x, state.player.pos.y);
@@ -2197,14 +2227,14 @@ function handleAction(action: Action): void {
   }
 
   if (action.kind === 'toggleInventory') {
-    state.activePanel = state.activePanel === 'inventory' ? 'none' : 'inventory';
+    state.activePanel = state.activePanel === PanelMode.Inventory ? PanelMode.None : PanelMode.Inventory;
     render();
     return;
   }
 
   if (action.kind === 'toggleShop') {
-    if (state.activePanel === 'shop') {
-      state.activePanel = 'none';
+    if (state.activePanel === PanelMode.Shop) {
+      state.activePanel = PanelMode.None;
       render();
       return;
     }
@@ -2213,7 +2243,7 @@ function handleAction(action: Action): void {
       render();
       return;
     }
-    state.activePanel = 'shop';
+    state.activePanel = PanelMode.Shop;
     const townPos: Point | undefined = getActiveTownWorldPos();
     if (townPos) {
       ensureShopForTown(state, townPos);
@@ -2241,8 +2271,8 @@ function handleAction(action: Action): void {
   }
 
   if (action.kind === 'toggleQuest') {
-    if (state.activePanel === 'quest') {
-      state.activePanel = 'none';
+    if (state.activePanel === PanelMode.Quest) {
+      state.activePanel = PanelMode.None;
       render();
       return;
     }
@@ -2251,7 +2281,7 @@ function handleAction(action: Action): void {
       render();
       return;
     }
-    state.activePanel = 'quest';
+    state.activePanel = PanelMode.Quest;
     const townPos: Point | undefined = getActiveTownWorldPos();
     if (townPos) {
       ensureQuestForTown(state, townPos);
@@ -2263,7 +2293,7 @@ function handleAction(action: Action): void {
   }
 
   if (action.kind === 'toggleStory') {
-    state.activePanel = state.activePanel === 'story' ? 'none' : 'story';
+    state.activePanel = state.activePanel === PanelMode.Story ? PanelMode.None : PanelMode.Story;
     render();
     return;
   }
@@ -2321,7 +2351,7 @@ function playerTurn(action: Action): boolean {
     return false;
   }
 
-  if (state.mode === 'overworld' && state.autoPath && state.autoPath.length >= 2) {
+  if (state.mode === Mode.Overworld && state.autoPath && state.autoPath.length >= 2) {
     // If the player presses a time-advancing key (move or space), advance one step along the path.
     if (action.kind === 'move' || action.kind === 'wait') {
       const next: Point = state.autoPath[1];
@@ -2366,7 +2396,7 @@ function playerTurn(action: Action): boolean {
   }
 
   if (action.kind === 'use') {
-    if (state.mode === 'overworld') {
+    if (state.mode === Mode.Overworld) {
       const entrance = getOverworldEntranceKind();
       if (entrance) {
         enterDungeonAt(state.player.pos, entrance);
@@ -2378,18 +2408,18 @@ function playerTurn(action: Action): boolean {
       }
       state.log.push(t('log.use.none'));
       return false;
-    } else if (state.mode === 'dungeon') {
+    } else if (state.mode === Mode.Dungeon) {
       const dungeon: Dungeon | undefined = getCurrentDungeon(state);
       if (!dungeon) {
         return false;
       }
 
       const tile = getDungeonTile(dungeon, state.player.pos.x, state.player.pos.y);
-      if (tile === 'stairsUp') {
+      if (tile === DungeonTile.StairsUp) {
         goUpLevelOrExit();
         return true;
       }
-      if (tile === 'stairsDown') {
+      if (tile === DungeonTile.StairsDown) {
         goDownLevel();
         return true;
       }
@@ -2424,7 +2454,7 @@ function playerTurn(action: Action): boolean {
  */
 function pickupAtPlayer(): boolean {
   const dungeon: Dungeon | undefined = getCurrentDungeon(state);
-  if (state.mode !== 'dungeon' || !dungeon) {
+  if (state.mode !== Mode.Dungeon || !dungeon) {
     state.log.push(t('log.pickup.onlyDungeon'));
     return false;
   }
@@ -2433,7 +2463,7 @@ function pickupAtPlayer(): boolean {
     if (!it.mapRef || !it.pos) {
       continue;
     }
-    if (it.mapRef.kind !== 'dungeon') {
+    if (it.mapRef.kind !== Mode.Dungeon) {
       continue;
     }
     if (it.mapRef.dungeonId !== dungeon.id) {
@@ -2462,13 +2492,13 @@ function pickupAtPlayer(): boolean {
 function tryMovePlayer(dx: number, dy: number): boolean {
   const target: Point = add(state.player.pos, { x: dx, y: dy });
 
-  if (state.mode === 'dungeon') {
+  if (state.mode === Mode.Dungeon) {
     const dungeon: Dungeon | undefined = getCurrentDungeon(state);
     if (!dungeon) {
       return false;
     }
 
-    const blocker: Entity | undefined = isBlockedByEntity(state.entities, 'dungeon', dungeon.id, undefined, target);
+    const blocker: Entity | undefined = isBlockedByEntity(state.entities, Mode.Dungeon, dungeon.id, undefined, target);
     if (blocker && blocker.kind === 'monster') {
       attack(state.player, blocker);
       return true;
@@ -2482,13 +2512,13 @@ function tryMovePlayer(dx: number, dy: number): boolean {
     return true;
   }
 
-  if (state.mode === 'town') {
+  if (state.mode === Mode.Town) {
     const town: Town | undefined = getCurrentTown(state);
     if (!town) {
       return false;
     }
 
-    const blocker: Entity | undefined = isBlockedByEntity(state.entities, 'town', undefined, town.id, target);
+    const blocker: Entity | undefined = isBlockedByEntity(state.entities, Mode.Town, undefined, town.id, target);
     if (blocker && blocker.kind === 'monster') {
       attack(state.player, blocker);
       return true;
@@ -2499,7 +2529,7 @@ function tryMovePlayer(dx: number, dy: number): boolean {
     }
 
     state.player.pos = target;
-    if (getTownTile(town, target.x, target.y) === 'gate') {
+    if (getTownTile(town, target.x, target.y) === TownTile.Gate) {
       state.log.push(t('log.town.passGate'));
       exitTownToOverworld();
     }
@@ -2909,7 +2939,7 @@ function wraithDrain(attacker: Entity, defender: Entity): void {
  * Executes the monsters' turn in a dungeon.
  */
 function monstersTurn(): void {
-  if (state.mode !== 'dungeon') {
+  if (state.mode !== Mode.Dungeon) {
     return;
   }
 
@@ -2932,7 +2962,7 @@ function monstersTurn(): void {
     if (e.hp <= 0) {
       continue;
     }
-    if (e.mapRef.kind !== 'dungeon') {
+    if (e.mapRef.kind !== Mode.Dungeon) {
       continue;
     }
     if (e.mapRef.dungeonId !== dungeon.id) {
@@ -2968,7 +2998,7 @@ function monstersTurn(): void {
         continue;
       }
 
-      const blocked: Entity | undefined = isBlockedByEntity(state.entities, 'dungeon', dungeon.id, undefined, next);
+      const blocked: Entity | undefined = isBlockedByEntity(state.entities, Mode.Dungeon, dungeon.id, undefined, next);
       if (blocked) {
         continue;
       }
@@ -2996,8 +3026,8 @@ function enterDungeonAt(worldPos: Point, entranceKind: 'dungeon' | 'cave'): void
   const dungeon: Dungeon = ensureDungeonLevel(state, baseId, depth, worldPos, layout);
 
   state.dungeonStack = [{ baseId, depth, entranceWorldPos: { x: worldPos.x, y: worldPos.y }, layout }];
-  state.mode = 'dungeon';
-  state.player.mapRef = { kind: 'dungeon', dungeonId: dungeon.id };
+  state.mode = Mode.Dungeon;
+  state.player.mapRef = { kind: Mode.Dungeon, dungeonId: dungeon.id };
   state.player.pos = { x: dungeon.stairsUp.x, y: dungeon.stairsUp.y };
 
   state.log.push(entranceKind === 'cave' ? t('log.enter.cave') : t('log.enter.dungeon'));
@@ -3012,12 +3042,12 @@ function enterDungeonAt(worldPos: Point, entranceKind: 'dungeon' | 'cave'): void
 function enterTownAt(worldPos: Point): void {
   const center: Point = state.overworld.getTownCenter(worldPos.x, worldPos.y) ?? worldPos;
   const town: Town = ensureTownInterior(state, center);
-  state.mode = 'town';
+  state.mode = Mode.Town;
   state.currentTownId = town.id;
   state.townReturnPos = { x: worldPos.x, y: worldPos.y };
   state.destination = undefined;
   state.autoPath = undefined;
-  state.player.mapRef = { kind: 'town', townId: town.id };
+  state.player.mapRef = { kind: Mode.Town, townId: town.id };
   state.player.pos = { x: town.entrance.x, y: town.entrance.y };
   state.log.push(t('log.enter.town'));
   addStoryEvent(state, 'story.event.enterTown.title', 'story.event.enterTown.detail', { townId: town.id });
@@ -3028,8 +3058,8 @@ function enterTownAt(worldPos: Point): void {
  */
 function exitTownToOverworld(): void {
   const returnPos: Point = state.townReturnPos ?? { x: 0, y: 0 };
-  state.mode = 'overworld';
-  state.player.mapRef = { kind: 'overworld' };
+  state.mode = Mode.Overworld;
+  state.player.mapRef = { kind: Mode.Overworld };
   state.player.pos = { x: returnPos.x, y: returnPos.y };
   state.currentTownId = undefined;
   state.townReturnPos = undefined;
@@ -3050,7 +3080,7 @@ function goDownLevel(): void {
   const dungeon: Dungeon = ensureDungeonLevel(state, current.baseId, nextDepth, current.entranceWorldPos, current.layout);
 
   state.dungeonStack.push({ baseId: current.baseId, depth: nextDepth, entranceWorldPos: current.entranceWorldPos, layout: current.layout });
-  state.player.mapRef = { kind: 'dungeon', dungeonId: dungeon.id };
+  state.player.mapRef = { kind: Mode.Dungeon, dungeonId: dungeon.id };
   state.player.pos = { x: dungeon.stairsUp.x, y: dungeon.stairsUp.y };
   state.log.push(t('log.dungeon.descend', { depth: nextDepth, theme: t(`theme.${dungeon.theme}`) }));
   addStoryEvent(state, 'story.event.descend.title', 'story.event.descend.detail', { depth: nextDepth, theme: t(`theme.${dungeon.theme}`) });
@@ -3068,8 +3098,8 @@ function goUpLevelOrExit(): void {
       return;
     }
 
-    state.mode = 'overworld';
-    state.player.mapRef = { kind: 'overworld' };
+    state.mode = Mode.Overworld;
+    state.player.mapRef = { kind: Mode.Overworld };
     state.player.pos = { x: top.entranceWorldPos.x, y: top.entranceWorldPos.y };
     state.dungeonStack = [];
     state.log.push(t('log.enter.overworld'));
@@ -3085,7 +3115,7 @@ function goUpLevelOrExit(): void {
     return;
   }
 
-  state.player.mapRef = { kind: 'dungeon', dungeonId };
+  state.player.mapRef = { kind: Mode.Dungeon, dungeonId };
   state.player.pos = { x: dungeon.stairsDown.x, y: dungeon.stairsDown.y };
   state.log.push(t('log.dungeon.ascend', { depth: prev.depth }));
   addStoryEvent(state, 'story.event.ascend.title', 'story.event.ascend.detail', { depth: prev.depth });
@@ -3097,7 +3127,7 @@ function goUpLevelOrExit(): void {
  * @param dest The destination point.
  */
 function setDestination(dest: Point): void {
-  if (state.mode !== 'overworld') {
+  if (state.mode !== Mode.Overworld) {
     return;
   }
 
@@ -3173,9 +3203,9 @@ function render(): void {
   const town: Town | undefined = getCurrentTown(state);
 
   modePill.textContent =
-    state.mode === 'overworld'
+    state.mode === Mode.Overworld
       ? t('ui.mode.overworld')
-      : state.mode === 'town'
+      : state.mode === Mode.Town
         ? t('ui.mode.town')
         : t('ui.mode.dungeon', {
             depth: state.dungeonStack[state.dungeonStack.length - 1]?.depth ?? 0,
@@ -3184,7 +3214,7 @@ function render(): void {
 
   renderPill.textContent = t('ui.render.pill', { fov: state.useFov ? t('ui.fov.on') : t('ui.fov.off') });
 
-  if (state.mode === 'dungeon' && dungeon && state.useFov) {
+  if (state.mode === Mode.Dungeon && dungeon && state.useFov) {
     decayVisibilityToSeen(dungeon);
     computeDungeonFov(dungeon, state.player.pos, 10);
   }
@@ -3325,7 +3355,7 @@ function renderMinimap(): void {
   ctx.fillStyle = '#140f0b';
   ctx.fillRect(0, 0, minimapCanvas.width, minimapCanvas.height);
 
-  if (state.mode !== 'overworld') {
+  if (state.mode !== Mode.Overworld) {
     ctx.fillStyle = '#c7b79b';
     ctx.font = '14px Georgia, Times New Roman, serif';
     ctx.textAlign = 'center';
@@ -3448,8 +3478,25 @@ panelEl.addEventListener('click', (e: MouseEvent) => {
   }
   if (act === 'shopCat') {
     const cat: string | null = target.getAttribute('data-cat');
-    if (cat === 'all' || cat === 'potion' || cat === 'weapon' || cat === 'armor') {
-      state.shopCategory = cat;
+    let nextCategory: ShopSpecialty | undefined;
+    switch (cat) {
+      case ShopSpecialty.All:
+        nextCategory = ShopSpecialty.All;
+        break;
+      case ShopSpecialty.Potion:
+        nextCategory = ShopSpecialty.Potion;
+        break;
+      case ShopSpecialty.Weapon:
+        nextCategory = ShopSpecialty.Weapon;
+        break;
+      case ShopSpecialty.Armor:
+        nextCategory = ShopSpecialty.Armor;
+        break;
+      default:
+        nextCategory = undefined;
+    }
+    if (nextCategory) {
+      state.shopCategory = nextCategory;
     }
     render();
     return;
@@ -3476,7 +3523,7 @@ panelEl.addEventListener('click', (e: MouseEvent) => {
  */
 function usePotion(itemId: string): void {
   const it: Item | undefined = state.items.find((x) => x.id === itemId);
-  if (!it || it.kind !== 'potion') {
+  if (!it || it.kind !== ItemKind.Potion) {
     return;
   }
   if (!state.player.inventory.includes(itemId)) {
@@ -3499,7 +3546,7 @@ function usePotion(itemId: string): void {
  */
 function equipWeapon(itemId: string): void {
   const it: Item | undefined = state.items.find((x) => x.id === itemId);
-  if (!it || it.kind !== 'weapon') {
+  if (!it || it.kind !== ItemKind.Weapon) {
     return;
   }
   if (!state.player.inventory.includes(itemId)) {
@@ -3515,7 +3562,7 @@ function equipWeapon(itemId: string): void {
  */
 function equipArmor(itemId: string): void {
   const it: Item | undefined = state.items.find((x) => x.id === itemId);
-  if (!it || it.kind !== 'armor') {
+  if (!it || it.kind !== ItemKind.Armor) {
     return;
   }
   if (!state.player.inventory.includes(itemId)) {
@@ -3539,10 +3586,10 @@ function dropItem(itemId: string): void {
   }
 
   // Drop only if in dungeon; else just discard (simple for now)
-  if (state.mode === 'dungeon') {
+  if (state.mode === Mode.Dungeon) {
     const dungeon: Dungeon | undefined = getCurrentDungeon(state);
     if (dungeon) {
-      it.mapRef = { kind: 'dungeon', dungeonId: dungeon.id };
+      it.mapRef = { kind: Mode.Dungeon, dungeonId: dungeon.id };
       it.pos = { x: state.player.pos.x, y: state.player.pos.y };
       state.log.push(t('item.drop', { name: it.name }));
     }
@@ -3824,19 +3871,19 @@ btnLoad.addEventListener('click', () => {
 });
 
 btnInv.addEventListener('click', () => {
-  state.activePanel = state.activePanel === 'inventory' ? 'none' : 'inventory';
+  state.activePanel = state.activePanel === PanelMode.Inventory ? PanelMode.None : PanelMode.Inventory;
   render();
 });
 btnShop.addEventListener('click', () => {
-  state.activePanel = state.activePanel === 'shop' ? 'none' : 'shop';
-  if (state.activePanel === 'shop' && isStandingOnTown()) {
+  state.activePanel = state.activePanel === PanelMode.Shop ? PanelMode.None : PanelMode.Shop;
+  if (state.activePanel === PanelMode.Shop && isStandingOnTown()) {
     ensureShopForTown(state, state.player.pos);
   }
   render();
 });
 
 btnStory.addEventListener('click', () => {
-  state.activePanel = state.activePanel === 'story' ? 'none' : 'story';
+  state.activePanel = state.activePanel === PanelMode.Story ? PanelMode.None : PanelMode.Story;
   render();
 });
 
@@ -3964,7 +4011,7 @@ function doSave(): void {
 function applyLoadedSave(data: SaveDataV3): boolean {
   const rng: Rng = new Rng(data.worldSeed);
   const overworld: Overworld = new Overworld(data.worldSeed);
-  const resolvedMode: Mode = data.mode === 'town' && (!data.townId || !data.townReturnPos) ? 'overworld' : data.mode;
+  const resolvedMode: Mode = data.mode === Mode.Town && (!data.townId || !data.townReturnPos) ? Mode.Overworld : data.mode;
 
   const dungeonsMap: Map<string, Dungeon> = new Map<string, Dungeon>();
   for (const d of data.dungeons) dungeonsMap.set(d.id, d);
@@ -3973,7 +4020,7 @@ function applyLoadedSave(data: SaveDataV3): boolean {
   for (const s of data.shops) shopsMap.set(s.id, s);
 
   const townsMap: Map<string, Town> = new Map<string, Town>();
-  if (resolvedMode === 'town' && data.townId && data.townReturnPos) {
+  if (resolvedMode === Mode.Town && data.townId && data.townReturnPos) {
     const center: Point | undefined = overworld.getTownCenter(data.townReturnPos.x, data.townReturnPos.y);
     if (center) {
       const seed: number = townSeedFromWorldPos(data.worldSeed, center.x, center.y);
@@ -4006,8 +4053,8 @@ function applyLoadedSave(data: SaveDataV3): boolean {
     dungeons: dungeonsMap,
     dungeonStack: rebuildDungeonStackFromPlayer(data, player),
     towns: townsMap,
-    currentTownId: resolvedMode === 'town' ? data.townId : undefined,
-    townReturnPos: resolvedMode === 'town' ? data.townReturnPos : undefined,
+    currentTownId: resolvedMode === Mode.Town ? data.townId : undefined,
+    townReturnPos: resolvedMode === Mode.Town ? data.townReturnPos : undefined,
     player,
     playerClass: loadedClass,
     story: loadedStory,
@@ -4016,8 +4063,8 @@ function applyLoadedSave(data: SaveDataV3): boolean {
     shops: shopsMap,
     rendererMode: state.rendererMode,
     useFov: state.useFov,
-    activePanel: (data.activePanel as PanelMode) ?? 'none',
-    shopCategory: 'all',
+    activePanel: data.activePanel ?? PanelMode.None,
+    shopCategory: ShopSpecialty.All,
     turnCounter: data.turnCounter ?? 0,
     quests: data.quests ?? [],
     mapOpen: true,
@@ -4027,11 +4074,11 @@ function applyLoadedSave(data: SaveDataV3): boolean {
     log: new MessageLog(160)
   };
 
-  if (resolvedMode === 'overworld' && player.mapRef.kind === 'town') {
-    player.mapRef = { kind: 'overworld' };
+  if (resolvedMode === Mode.Overworld && player.mapRef.kind === Mode.Town) {
+    player.mapRef = { kind: Mode.Overworld };
   }
-  if (resolvedMode === 'town' && data.townId && player.mapRef.kind !== 'town') {
-    player.mapRef = { kind: 'town', townId: data.townId };
+  if (resolvedMode === Mode.Town && data.townId && player.mapRef.kind !== Mode.Town) {
+    player.mapRef = { kind: Mode.Town, townId: data.townId };
   }
 
   ensureStartingGear(state, loadedClass);
@@ -4182,7 +4229,7 @@ function layoutFromBaseId(baseId: string): DungeonLayout {
  */
 function rebuildDungeonStackFromPlayer(data: SaveDataV3, player: Entity): DungeonStackFrame[] {
   const mapRef = player.mapRef;
-  if (mapRef.kind !== 'dungeon') {
+  if (mapRef.kind !== Mode.Dungeon) {
     return [];
   }
   const dungeon: Dungeon | undefined = data.dungeons.find((d) => d.id === mapRef.dungeonId);

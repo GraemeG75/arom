@@ -1,4 +1,5 @@
-import type { Entity, Item, Mode } from '../core/types';
+import { DungeonTile, EntityKind, ItemKind, Mode, OverworldTile, TileVisibility, TownTile } from '../core/types';
+import type { Entity, Item } from '../core/types';
 import type { Overworld } from '../maps/overworld';
 import type { Dungeon } from '../maps/dungeon';
 import type { Town } from '../maps/town';
@@ -54,10 +55,10 @@ export function renderAscii(ctx: RenderContext, viewWidth: number, viewHeight: n
         continue;
       }
 
-      if (ctx.mode === 'overworld') {
+      if (ctx.mode === Mode.Overworld) {
         const t = ctx.overworld.getTile(wx, wy);
         out += overworldChar(t);
-      } else if (ctx.mode === 'dungeon') {
+      } else if (ctx.mode === Mode.Dungeon) {
         const dungeon: Dungeon | undefined = ctx.dungeon;
         if (!dungeon) {
           out += ' ';
@@ -70,7 +71,7 @@ export function renderAscii(ctx: RenderContext, viewWidth: number, viewHeight: n
 
         if (ctx.useFov) {
           const v = getVisibility(dungeon, wx, wy);
-          if (v === 'unseen') {
+          if (v === TileVisibility.Unseen) {
             out += ' ';
             continue;
           }
@@ -105,19 +106,19 @@ export function renderAscii(ctx: RenderContext, viewWidth: number, viewHeight: n
  */
 function findEntityChar(ctx: RenderContext, x: number, y: number): string | undefined {
   for (const e of ctx.entities) {
-    if (e.kind !== 'monster') {
+    if (e.kind !== EntityKind.Monster) {
       continue;
     }
     if (e.hp <= 0) {
       continue;
     }
 
-    if (ctx.mode === 'overworld') {
-      if (e.mapRef.kind !== 'overworld') {
+    if (ctx.mode === Mode.Overworld) {
+      if (e.mapRef.kind !== Mode.Overworld) {
         continue;
       }
-    } else if (ctx.mode === 'dungeon') {
-      if (e.mapRef.kind !== 'dungeon') {
+    } else if (ctx.mode === Mode.Dungeon) {
+      if (e.mapRef.kind !== Mode.Dungeon) {
         continue;
       }
       if (!ctx.dungeon) {
@@ -129,12 +130,12 @@ function findEntityChar(ctx: RenderContext, x: number, y: number): string | unde
 
       if (ctx.useFov) {
         const v = getVisibility(ctx.dungeon, x, y);
-        if (v !== 'visible') {
+        if (v !== TileVisibility.Visible) {
           continue;
         }
       }
     } else {
-      if (e.mapRef.kind !== 'town') {
+      if (e.mapRef.kind !== Mode.Town) {
         continue;
       }
       if (!ctx.town) {
@@ -166,12 +167,12 @@ function findItemChar(ctx: RenderContext, x: number, y: number): string | undefi
       continue;
     }
 
-    if (ctx.mode === 'overworld') {
-      if (it.mapRef.kind !== 'overworld') {
+    if (ctx.mode === Mode.Overworld) {
+      if (it.mapRef.kind !== Mode.Overworld) {
         continue;
       }
-    } else if (ctx.mode === 'dungeon') {
-      if (it.mapRef.kind !== 'dungeon') {
+    } else if (ctx.mode === Mode.Dungeon) {
+      if (it.mapRef.kind !== Mode.Dungeon) {
         continue;
       }
       if (!ctx.dungeon) {
@@ -182,12 +183,12 @@ function findItemChar(ctx: RenderContext, x: number, y: number): string | undefi
       }
       if (ctx.useFov) {
         const v = getVisibility(ctx.dungeon, x, y);
-        if (v !== 'visible') {
+        if (v !== TileVisibility.Visible) {
           continue;
         }
       }
     } else {
-      if (it.mapRef.kind !== 'town') {
+      if (it.mapRef.kind !== Mode.Town) {
         continue;
       }
       if (!ctx.town) {
@@ -211,13 +212,13 @@ function findItemChar(ctx: RenderContext, x: number, y: number): string | undefi
  * @param kind The item kind.
  * @returns The glyph character.
  */
-function itemChar(kind: string): string {
+function itemChar(kind: ItemKind): string {
   switch (kind) {
-    case 'potion':
+    case ItemKind.Potion:
       return '!';
-    case 'weapon':
+    case ItemKind.Weapon:
       return ')';
-    case 'armor':
+    case ItemKind.Armor:
       return ']';
     default:
       return '?';
@@ -229,35 +230,35 @@ function itemChar(kind: string): string {
  * @param tile The overworld tile.
  * @returns The glyph character.
  */
-function overworldChar(tile: string): string {
+function overworldChar(tile: OverworldTile): string {
   switch (tile) {
-    case 'water':
+    case OverworldTile.Water:
       return '~';
-    case 'water_deep':
+    case OverworldTile.WaterDeep:
       return '~';
-    case 'grass':
+    case OverworldTile.Grass:
       return '.';
-    case 'forest':
+    case OverworldTile.Forest:
       return '♣';
-    case 'mountain':
+    case OverworldTile.Mountain:
       return '^';
-    case 'mountain_snow':
+    case OverworldTile.MountainSnow:
       return 'A';
-    case 'dungeon':
+    case OverworldTile.Dungeon:
       return 'D';
-    case 'cave':
+    case OverworldTile.Cave:
       return 'C';
-    case 'town':
+    case OverworldTile.Town:
       return 'T';
-    case 'town_shop':
+    case OverworldTile.TownShop:
       return 'S';
-    case 'town_tavern':
+    case OverworldTile.TownTavern:
       return 'V';
-    case 'town_smith':
+    case OverworldTile.TownSmith:
       return 'F';
-    case 'town_house':
+    case OverworldTile.TownHouse:
       return 'H';
-    case 'road':
+    case OverworldTile.Road:
       return '=';
     default:
       return '?';
@@ -269,17 +270,17 @@ function overworldChar(tile: string): string {
  * @param tile The dungeon tile.
  * @returns The glyph character.
  */
-function dungeonChar(tile: string): string {
+function dungeonChar(tile: DungeonTile): string {
   switch (tile) {
-    case 'wall':
+    case DungeonTile.Wall:
       return '#';
-    case 'floor':
+    case DungeonTile.Floor:
       return '.';
-    case 'bossFloor':
+    case DungeonTile.BossFloor:
       return '*';
-    case 'stairsUp':
+    case DungeonTile.StairsUp:
       return '<';
-    case 'stairsDown':
+    case DungeonTile.StairsDown:
       return '>';
     default:
       return '?';
@@ -291,25 +292,25 @@ function dungeonChar(tile: string): string {
  * @param tile The town tile.
  * @returns The glyph character.
  */
-function townChar(tile: string): string {
+function townChar(tile: TownTile): string {
   switch (tile) {
-    case 'wall':
+    case TownTile.Wall:
       return '#';
-    case 'road':
+    case TownTile.Road:
       return '+';
-    case 'square':
+    case TownTile.Square:
       return 'T';
-    case 'gate':
+    case TownTile.Gate:
       return 'G';
-    case 'shop':
+    case TownTile.Shop:
       return 'S';
-    case 'tavern':
+    case TownTile.Tavern:
       return 'V';
-    case 'smith':
+    case TownTile.Smith:
       return 'F';
-    case 'house':
+    case TownTile.House:
       return 'H';
-    case 'floor':
+    case TownTile.Floor:
     default:
       return '.';
   }

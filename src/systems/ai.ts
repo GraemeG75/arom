@@ -1,3 +1,4 @@
+import { Mode } from '../core/types';
 import type { Entity, Point } from '../core/types';
 import type { Dungeon } from '../maps/dungeon';
 import { aStar } from './astar';
@@ -16,7 +17,7 @@ export function nextMonsterStep(monster: Entity, player: Entity, dungeon: Dungeo
     monster.pos,
     player.pos,
     (p: Point) => canEnterDungeonTile(dungeon, p),
-    (p: Point) => !!isBlockedByEntity(entities, 'dungeon', dungeon.id, undefined, p)
+    (p: Point) => !!isBlockedByEntity(entities, Mode.Dungeon, dungeon.id, undefined, p)
   );
 
   if (!path || path.length < 2) {

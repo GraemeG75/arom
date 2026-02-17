@@ -1,3 +1,4 @@
+import { TileVisibility } from '../core/types';
 import type { Point } from '../core/types';
 import { clamp } from '../core/util';
 import type { Dungeon } from '../maps/dungeon';
@@ -49,8 +50,8 @@ function bresenhamLine(a: Point, b: Point): Point[] {
  */
 export function decayVisibilityToSeen(dungeon: Dungeon): void {
   for (let i: number = 0; i < dungeon.visibility.length; i++) {
-    if (dungeon.visibility[i] === 'visible') {
-      dungeon.visibility[i] = 'seen';
+    if (dungeon.visibility[i] === TileVisibility.Visible) {
+      dungeon.visibility[i] = TileVisibility.Seen;
     }
   }
 }
@@ -90,7 +91,7 @@ export function computeDungeonFov(dungeon: Dungeon, origin: Point, radius: numbe
 
         const k: string = `${p.x},${p.y}`;
         visible.add(k);
-        setVisibility(dungeon, p.x, p.y, 'visible');
+        setVisibility(dungeon, p.x, p.y, TileVisibility.Visible);
 
         if (p.x === x && p.y === y) {
           break;

@@ -1,3 +1,4 @@
+import { Mode } from '../core/types';
 import type { Entity, Point } from '../core/types';
 import type { Overworld } from '../maps/overworld';
 import type { Dungeon } from '../maps/dungeon';
@@ -16,25 +17,25 @@ import { getTownTile, isTownWalkable } from '../maps/town';
  */
 export function isBlockedByEntity(
   entities: Entity[],
-  mapKind: 'overworld' | 'dungeon' | 'town',
+  mapKind: Mode,
   dungeonId: string | undefined,
   townId: string | undefined,
   pos: Point
 ): Entity | undefined {
   for (const e of entities) {
-    if (mapKind === 'overworld') {
-      if (e.mapRef.kind !== 'overworld') {
+    if (mapKind === Mode.Overworld) {
+      if (e.mapRef.kind !== Mode.Overworld) {
         continue;
       }
-    } else if (mapKind === 'dungeon') {
-      if (e.mapRef.kind !== 'dungeon') {
+    } else if (mapKind === Mode.Dungeon) {
+      if (e.mapRef.kind !== Mode.Dungeon) {
         continue;
       }
       if (e.mapRef.dungeonId !== dungeonId) {
         continue;
       }
     } else {
-      if (e.mapRef.kind !== 'town') {
+      if (e.mapRef.kind !== Mode.Town) {
         continue;
       }
       if (e.mapRef.townId !== townId) {

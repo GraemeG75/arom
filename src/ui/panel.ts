@@ -1,7 +1,6 @@
-import type { CharacterStory, Entity, GearRarity, Item, Shop, ShopEconomy } from '../core/types';
+import { GearRarity, ItemKind, PanelMode, QuestKind, ShopSpecialty } from '../core/types';
+import type { CharacterStory, Entity, Item, Shop, ShopEconomy } from '../core/types';
 import { t } from '../i18n';
-
-export type PanelMode = 'none' | 'inventory' | 'shop' | 'quest' | 'story';
 
 export type PanelContext = {
   mode: PanelMode;
@@ -12,7 +11,7 @@ export type PanelContext = {
   quests: import('../core/types').Quest[];
   story: CharacterStory;
   activeTownId?: string;
-  shopCategory: 'all' | 'potion' | 'weapon' | 'armor';
+  shopCategory: ShopSpecialty;
   shopEconomy?: ShopEconomy;
   shopBuyPrices?: Record<string, number>;
   shopSellPrices?: Record<string, number>;
@@ -24,16 +23,16 @@ export type PanelContext = {
  * @returns The HTML string.
  */
 export function renderPanelHtml(ctx: PanelContext): string {
-  if (ctx.mode === 'inventory') {
+  if (ctx.mode === PanelMode.Inventory) {
     return renderInventory(ctx.player, ctx.items);
   }
-  if (ctx.mode === 'shop') {
+  if (ctx.mode === PanelMode.Shop) {
     return renderShop(ctx.player, ctx.items, ctx.activeShop, ctx.canShop, ctx.shopCategory, ctx.shopEconomy, ctx.shopBuyPrices, ctx.shopSellPrices);
   }
-  if (ctx.mode === 'quest') {
+  if (ctx.mode === PanelMode.Quest) {
     return renderQuestLog(ctx.quests, ctx.activeTownId, ctx.items);
   }
-  if (ctx.mode === 'story') {
+  if (ctx.mode === PanelMode.Story) {
     return renderStory(ctx.story, ctx.player);
   }
   const invTag: string = `<b>${escapeHtml(t('panel.tag.inventory'))}</b>`;
@@ -49,7 +48,7 @@ export function renderPanelHtml(ctx: PanelContext): string {
  * @returns The HTML string.
  */
 function renderRarityBadge(item: Item): string {
-  const rarity: GearRarity = item.rarity ?? 'common';
+  const rarity: GearRarity = item.rarity ?? GearRarity.Common;
   const label: string = t(`rarity.${rarity}.label`);
   return `<span class="rarityBadge rarity-${rarity}">${escapeHtml(label)}</span>`;
 }
@@ -60,12 +59,12 @@ function renderRarityBadge(item: Item): string {
  * @returns The formatted string.
  */
 function formatItemExtra(it: Item): string {
-  if (it.kind === 'potion') {
+  if (it.kind === ItemKind.Potion) {
     return t('panel.item.extra.potion', { amount: it.healAmount ?? 0 });
   }
 
   const parts: string[] = [];
-  if (it.kind === 'weapon') {
+  if (it.kind === ItemKind.Weapon) {
     parts.push(t('panel.item.extra.attack', { amount: it.attackBonus ?? 0 }));
     if ((it.critChance ?? 0) > 0) {
       parts.push(t('panel.item.extra.crit', { amount: it.critChance ?? 0 }));
@@ -74,7 +73,7 @@ function formatItemExtra(it: Item): string {
       parts.push(t('panel.item.extra.leech', { amount: it.lifesteal ?? 0 }));
     }
   }
-  if (it.kind === 'armor') {
+  if (it.kind === ItemKind.Armor) {
     parts.push(t('panel.item.extra.defense', { amount: it.defenseBonus ?? 0 }));
     if ((it.dodgeChance ?? 0) > 0) {
       parts.push(t('panel.item.extra.dodge', { amount: it.dodgeChance ?? 0 }));
@@ -131,10 +130,10 @@ function renderInventory(player: Entity, items: Item[]): string {
     const extra: string = formatItemExtra(it);
     const actions: string[] = [];
 
-    if (it.kind === 'potion') {
+    if (it.kind === ItemKind.Potion) {
       actions.push(`<button class="btnTiny" data-act="use" data-item="${it.id}">${escapeHtml(t('panel.inventory.use'))}</button>`);
     }
-    if (it.kind === 'weapon') {
+    if (it.kind === ItemKind.Weapon) {
       const currentWeaponId: string | undefined = player.equipment.weaponItemId;
       const currentWeapon = currentWeaponId ? items.find((x) => x.id === currentWeaponId) : undefined;
       const curAtk: number = currentWeapon?.attackBonus ?? 0;
@@ -147,7 +146,7 @@ function renderInventory(player: Entity, items: Item[]): string {
         )}</button>`
       );
     }
-    if (it.kind === 'armor') {
+    if (it.kind === ItemKind.Armor) {
       const currentArmorId: string | undefined = player.equipment.armorItemId;
       const currentArmor = currentArmorId ? items.find((x) => x.id === currentArmorId) : undefined;
       const curDef: number = currentArmor?.defenseBonus ?? 0;
@@ -189,7 +188,7 @@ function renderShop(
   items: Item[],
   shop: Shop | undefined,
   canShop: boolean,
-  category: 'all' | 'potion' | 'weapon' | 'armor',
+  category: ShopSpecialty,
   economy: ShopEconomy | undefined,
   buyPrices: Record<string, number> | undefined,
   sellPrices: Record<string, number> | undefined
@@ -211,7 +210,8 @@ function renderShop(
 
   lines.push(`<div class="small panelMeta">${escapeHtml(t('panel.shop.gold', { gold: player.gold }))}</div>`);
   if (economy) {
-    const specialtyLabel: string = economy.specialty === 'all' ? t('panel.shop.specialty.general') : t(`panel.shop.specialty.${economy.specialty}`);
+    const specialtyLabel: string =
+      economy.specialty === ShopSpecialty.All ? t('panel.shop.specialty.general') : t(`panel.shop.specialty.${economy.specialty}`);
     const featuredItem: Item | undefined = economy.featuredItemId ? items.find((x) => x.id === economy.featuredItemId) : undefined;
     const featuredText: string = featuredItem
       ? t('panel.shop.featured', { item: `<b>${escapeHtml(featuredItem.name)}</b>`, discount: 20 })
@@ -246,7 +246,7 @@ function renderShop(
     if (!it) {
       continue;
     }
-    if (category !== 'all' && it.kind !== category) {
+    if (category !== ShopSpecialty.All && it.kind !== category) {
       continue;
     }
 
@@ -326,7 +326,7 @@ function renderQuestLog(quests: import('../core/types').Quest[], activeTownId: s
   for (const q of scoped) {
     const status: string = q.turnedIn ? t('quest.status.turnedIn') : q.completed ? t('quest.status.complete') : t('quest.status.active');
     const progress: string =
-      q.kind === 'reachDepth'
+      q.kind === QuestKind.ReachDepth
         ? t('panel.quest.progress.depth', { current: q.currentCount, target: q.targetCount })
         : t('panel.quest.progress.count', { current: q.currentCount, target: q.targetCount });
     const rewardItem: Item | undefined = q.rewardItemId ? items.find((it) => it.id === q.rewardItemId) : undefined;

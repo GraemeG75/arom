@@ -1,10 +1,11 @@
 import { Application, Container, Sprite, Texture, TilingSprite } from 'pixi.js';
-import type { Entity, Item, Mode } from '../core/types';
+import { DungeonTile, EntityKind, ItemKind, Mode, OverworldTile, TileVisibility, TownTile } from '../core/types';
+import type { Entity, Item } from '../core/types';
 import type { Overworld } from '../maps/overworld';
-import type { Dungeon, DungeonTheme } from '../maps/dungeon';
-import type { Town } from '../maps/town';
-import { getDungeonTile, getVisibility } from '../maps/dungeon';
+import type { Dungeon } from '../maps/dungeon';
+import { DungeonTheme, getDungeonTile, getVisibility } from '../maps/dungeon';
 import { getTownTile } from '../maps/town';
+import type { Town } from '../maps/town';
 import { SpriteAtlas, type SpriteKey } from './sprites';
 import { t } from '../i18n';
 
@@ -19,7 +20,13 @@ type PixiRenderContext = {
   useFov: boolean;
 };
 
-type PixiRenderMode = 'canvas' | 'isometric';
+type IsoMode = Mode.Overworld | Mode.Dungeon | Mode.Town;
+type IsoTile = OverworldTile | DungeonTile | TownTile;
+
+enum PixiRenderMode {
+  Canvas = 'canvas',
+  Isometric = 'isometric'
+}
 
 /**
  * Renderer implementation using Pixi.js. Uses a single sprite sheet for all tiles and entities, with dynamic texture generation for things like lighting and isometric rendering.
@@ -147,7 +154,7 @@ export class PixiRenderer {
    * @param renderMode The rendering mode, either 'canvas' or 'isometric'.
    * @returns void
    */
-  public render(ctx: PixiRenderContext, viewWidth: number, viewHeight: number, renderMode: PixiRenderMode = 'canvas'): void {
+  public render(ctx: PixiRenderContext, viewWidth: number, viewHeight: number, renderMode: PixiRenderMode = PixiRenderMode.Canvas): void {
     this.lastRender = { ctx, viewWidth, viewHeight, renderMode };
     if (!this.initialized) {
       this.pendingRender = { ctx, viewWidth, viewHeight, renderMode };
@@ -162,7 +169,7 @@ export class PixiRenderer {
       this.rebuildView(viewWidth, viewHeight);
     }
 
-    if (renderMode === 'isometric') {
+    if (renderMode === PixiRenderMode.Isometric) {
       this.renderIsometric(ctx, viewWidth, viewHeight);
       return;
     }
@@ -187,12 +194,12 @@ export class PixiRenderer {
         const idx: number = row * viewWidth + col;
         const sprite: Sprite = this.tileSprites[idx];
 
-        if (ctx.mode === 'overworld') {
-          const tile: string = ctx.overworld.getTile(wx, wy);
+        if (ctx.mode === Mode.Overworld) {
+          const tile: OverworldTile = ctx.overworld.getTile(wx, wy);
           sprite.texture = this.getTexture(this.overworldKey(tile));
           sprite.alpha = 1;
           sprite.visible = true;
-        } else if (ctx.mode === 'dungeon') {
+        } else if (ctx.mode === Mode.Dungeon) {
           if (!dungeon) {
             sprite.visible = false;
             continue;
@@ -202,16 +209,16 @@ export class PixiRenderer {
             continue;
           }
 
-          const tile = getDungeonTile(dungeon, wx, wy);
+          const tile: DungeonTile = getDungeonTile(dungeon, wx, wy);
           let tileAlpha: number = 1;
 
           if (ctx.useFov) {
             const vis = getVisibility(dungeon, wx, wy);
-            if (vis === 'unseen') {
+            if (vis === TileVisibility.Unseen) {
               sprite.visible = false;
               continue;
             }
-            if (vis === 'seen') {
+            if (vis === TileVisibility.Seen) {
               tileAlpha = 0.35;
             }
           }
@@ -222,12 +229,12 @@ export class PixiRenderer {
           sprite.alpha = tileAlpha * lightFactor;
           sprite.visible = true;
 
-          if (tile === 'stairsUp' || tile === 'stairsDown') {
+          if (tile === DungeonTile.StairsUp || tile === DungeonTile.StairsDown) {
             const palette = themePalette(dungeon.theme);
             pendingStairs.push({
               wx,
               wy,
-              glyph: tile === 'stairsUp' ? '<' : '>',
+              glyph: tile === DungeonTile.StairsUp ? '<' : '>',
               color: palette.glyph,
               alpha: tileAlpha * lightFactor
             });
@@ -242,7 +249,7 @@ export class PixiRenderer {
             sprite.visible = false;
             continue;
           }
-          const tile = getTownTile(town, wx, wy);
+          const tile: TownTile = getTownTile(town, wx, wy);
           sprite.texture = this.getTexture(this.townKey(tile));
           sprite.alpha = 1;
           sprite.visible = true;
@@ -259,12 +266,12 @@ export class PixiRenderer {
     this.drawPlayer(originX, originY, halfW, halfH, lightRadius, now);
 
     if (this.fogSprite) {
-      this.fogSprite.visible = ctx.mode === 'dungeon';
+      this.fogSprite.visible = ctx.mode === Mode.Dungeon;
     }
     this.updateFogDrift();
 
     if (this.vignetteSprite) {
-      this.vignetteSprite.alpha = ctx.mode === 'dungeon' ? 0.75 : 0.45;
+      this.vignetteSprite.alpha = ctx.mode === Mode.Dungeon ? 0.75 : 0.45;
     }
 
     for (const s of pendingStairs) {
@@ -312,7 +319,7 @@ export class PixiRenderer {
     this.entityLayer.removeChildren();
     this.overlayLayer.removeChildren();
 
-    const tiles: { wx: number; wy: number; kind: 'overworld' | 'dungeon' | 'town'; tile: string; theme?: DungeonTheme; alpha: number }[] = [];
+    const tiles: { wx: number; wy: number; kind: Mode; tile: OverworldTile | DungeonTile | TownTile; theme?: DungeonTheme; alpha: number }[] = [];
 
     for (let row: number = 0; row < renderH; row++) {
       for (let col: number = 0; col < renderW; col++) {
@@ -321,13 +328,13 @@ export class PixiRenderer {
         const wx: number = originX + x;
         const wy: number = originY + y;
 
-        if (ctx.mode === 'overworld') {
-          const tile: string = ctx.overworld.getTile(wx, wy);
-          tiles.push({ wx, wy, kind: 'overworld', tile, alpha: 1 });
+        if (ctx.mode === Mode.Overworld) {
+          const tile: OverworldTile = ctx.overworld.getTile(wx, wy);
+          tiles.push({ wx, wy, kind: Mode.Overworld, tile, alpha: 1 });
           continue;
         }
 
-        if (ctx.mode === 'dungeon') {
+        if (ctx.mode === Mode.Dungeon) {
           const dungeon: Dungeon | undefined = ctx.dungeon;
           if (!dungeon) {
             continue;
@@ -346,12 +353,12 @@ export class PixiRenderer {
           let tileAlpha: number = 1;
           if (ctx.useFov) {
             const vis = getVisibility(dungeon, wx, wy);
-            if (vis === 'seen') {
+            if (vis === TileVisibility.Seen) {
               tileAlpha = 0.35;
             }
           }
-          const tile = getDungeonTile(dungeon, wx, wy);
-          tiles.push({ wx, wy, kind: 'dungeon', tile, theme: dungeon.theme, alpha: tileAlpha * lightFactor });
+          const tile: DungeonTile = getDungeonTile(dungeon, wx, wy);
+          tiles.push({ wx, wy, kind: Mode.Dungeon, tile, theme: dungeon.theme, alpha: tileAlpha * lightFactor });
           continue;
         }
 
@@ -362,8 +369,8 @@ export class PixiRenderer {
         if (wx < 0 || wy < 0 || wx >= town.width || wy >= town.height) {
           continue;
         }
-        const tile = getTownTile(town, wx, wy);
-        tiles.push({ wx, wy, kind: 'town', tile, alpha: 1 });
+        const tile: TownTile = getTownTile(town, wx, wy);
+        tiles.push({ wx, wy, kind: Mode.Town, tile, alpha: 1 });
       }
     }
 
@@ -380,7 +387,7 @@ export class PixiRenderer {
       sprite.alpha = t.alpha;
       this.tileLayer.addChild(sprite);
 
-      if (t.kind === 'overworld' && t.tile === 'dungeon') {
+      if (t.kind === Mode.Overworld && t.tile === OverworldTile.Dungeon) {
         const glow = new Sprite(this.getIsoDungeonGlowTexture(isoTileW, isoTileH));
         const pulse: number = 0.55 + Math.sin(now / 420 + this.phaseFromId(`${t.wx},${t.wy}`)) * 0.2;
         glow.x = screen.x;
@@ -410,21 +417,21 @@ export class PixiRenderer {
       if (!it.mapRef || !it.pos) {
         continue;
       }
-      if (ctx.mode === 'overworld') {
-        if (it.mapRef.kind !== 'overworld') {
+      if (ctx.mode === Mode.Overworld) {
+        if (it.mapRef.kind !== Mode.Overworld) {
           continue;
         }
-      } else if (ctx.mode === 'dungeon') {
+      } else if (ctx.mode === Mode.Dungeon) {
         const dungeon: Dungeon | undefined = ctx.dungeon;
         if (!dungeon) {
           continue;
         }
-        if (it.mapRef.kind !== 'dungeon' || it.mapRef.dungeonId !== dungeon.id) {
+        if (it.mapRef.kind !== Mode.Dungeon || it.mapRef.dungeonId !== dungeon.id) {
           continue;
         }
         if (ctx.useFov) {
           const vis = getVisibility(dungeon, it.pos.x, it.pos.y);
-          if (vis !== 'visible') {
+          if (vis !== TileVisibility.Visible) {
             continue;
           }
         }
@@ -433,14 +440,14 @@ export class PixiRenderer {
         if (!town) {
           continue;
         }
-        if (it.mapRef.kind !== 'town' || it.mapRef.townId !== town.id) {
+        if (it.mapRef.kind !== Mode.Town || it.mapRef.townId !== town.id) {
           continue;
         }
       }
 
-      const spriteKey: SpriteKey = it.kind === 'potion' ? 'it_potion' : it.kind === 'weapon' ? 'it_weapon' : 'it_armor';
+      const spriteKey: SpriteKey = it.kind === ItemKind.Potion ? 'it_potion' : it.kind === ItemKind.Weapon ? 'it_weapon' : 'it_armor';
       const dist: number = Math.max(Math.abs(it.pos.x - originX), Math.abs(it.pos.y - originY));
-      const alpha: number = ctx.mode === 'dungeon' ? this.lightFalloff(dist, lightRadius) : 1;
+      const alpha: number = ctx.mode === Mode.Dungeon ? this.lightFalloff(dist, lightRadius) : 1;
       const baseHeight: number = this.isoTileHeightAt(ctx, it.pos.x, it.pos.y, isoTileH);
       draws.push({
         wx: it.pos.x,
@@ -453,25 +460,25 @@ export class PixiRenderer {
     }
 
     for (const entity of ctx.entities) {
-      if (entity.kind !== 'monster' || entity.hp <= 0) {
+      if (entity.kind !== EntityKind.Monster || entity.hp <= 0) {
         continue;
       }
 
-      if (ctx.mode === 'overworld') {
-        if (entity.mapRef.kind !== 'overworld') {
+      if (ctx.mode === Mode.Overworld) {
+        if (entity.mapRef.kind !== Mode.Overworld) {
           continue;
         }
-      } else if (ctx.mode === 'dungeon') {
+      } else if (ctx.mode === Mode.Dungeon) {
         const dungeon: Dungeon | undefined = ctx.dungeon;
         if (!dungeon) {
           continue;
         }
-        if (entity.mapRef.kind !== 'dungeon' || entity.mapRef.dungeonId !== dungeon.id) {
+        if (entity.mapRef.kind !== Mode.Dungeon || entity.mapRef.dungeonId !== dungeon.id) {
           continue;
         }
         if (ctx.useFov) {
           const vis = getVisibility(dungeon, entity.pos.x, entity.pos.y);
-          if (vis !== 'visible') {
+          if (vis !== TileVisibility.Visible) {
             continue;
           }
         }
@@ -480,13 +487,13 @@ export class PixiRenderer {
         if (!town) {
           continue;
         }
-        if (entity.mapRef.kind !== 'town' || entity.mapRef.townId !== town.id) {
+        if (entity.mapRef.kind !== Mode.Town || entity.mapRef.townId !== town.id) {
           continue;
         }
       }
 
       const dist: number = Math.max(Math.abs(entity.pos.x - originX), Math.abs(entity.pos.y - originY));
-      const alpha: number = ctx.mode === 'dungeon' ? this.lightFalloff(dist, lightRadius) : 1;
+      const alpha: number = ctx.mode === Mode.Dungeon ? this.lightFalloff(dist, lightRadius) : 1;
       const baseHeight: number = this.isoTileHeightAt(ctx, entity.pos.x, entity.pos.y, isoTileH);
       draws.push({
         wx: entity.pos.x,
@@ -502,7 +509,7 @@ export class PixiRenderer {
       wx: originX,
       wy: originY,
       key: 'ent_player',
-      alpha: ctx.mode === 'dungeon' ? this.lightFalloff(0, lightRadius) : 1,
+      alpha: ctx.mode === Mode.Dungeon ? this.lightFalloff(0, lightRadius) : 1,
       yOffset: this.tileSize / 2 - isoTileH / 2 + playerBaseHeight,
       bob: Math.sin(now / 700) * 0.4
     });
@@ -523,12 +530,12 @@ export class PixiRenderer {
     // Highlight rendered under entities.
 
     if (this.fogSprite) {
-      this.fogSprite.visible = ctx.mode === 'dungeon';
+      this.fogSprite.visible = ctx.mode === Mode.Dungeon;
     }
     this.updateFogDrift();
 
     if (this.vignetteSprite) {
-      this.vignetteSprite.alpha = ctx.mode === 'dungeon' ? 0.75 : 0.45;
+      this.vignetteSprite.alpha = ctx.mode === Mode.Dungeon ? 0.75 : 0.45;
     }
 
     this.renderLevelUpEffect(now);
@@ -633,11 +640,11 @@ export class PixiRenderer {
    * @returns The height of the isometric tile at the given position.
    */
   private isoTileHeightAt(ctx: PixiRenderContext, wx: number, wy: number, isoTileH: number): number {
-    if (ctx.mode === 'overworld') {
-      const tile: string = ctx.overworld.getTile(wx, wy);
-      return this.isoTileHeight('overworld', tile, isoTileH);
+    if (ctx.mode === Mode.Overworld) {
+      const tile: OverworldTile = ctx.overworld.getTile(wx, wy);
+      return this.isoTileHeight(Mode.Overworld, tile, isoTileH);
     }
-    if (ctx.mode === 'dungeon') {
+    if (ctx.mode === Mode.Dungeon) {
       const dungeon: Dungeon | undefined = ctx.dungeon;
       if (!dungeon) {
         return 0;
@@ -645,8 +652,8 @@ export class PixiRenderer {
       if (wx < 0 || wy < 0 || wx >= dungeon.width || wy >= dungeon.height) {
         return 0;
       }
-      const tile = getDungeonTile(dungeon, wx, wy);
-      return this.isoTileHeight('dungeon', tile, isoTileH);
+      const tile: DungeonTile = getDungeonTile(dungeon, wx, wy);
+      return this.isoTileHeight(Mode.Dungeon, tile, isoTileH);
     }
     const town: Town | undefined = ctx.town;
     if (!town) {
@@ -655,8 +662,8 @@ export class PixiRenderer {
     if (wx < 0 || wy < 0 || wx >= town.width || wy >= town.height) {
       return 0;
     }
-    const tile = getTownTile(town, wx, wy);
-    return this.isoTileHeight('town', tile, isoTileH);
+    const tile: TownTile = getTownTile(town, wx, wy);
+    return this.isoTileHeight(Mode.Town, tile, isoTileH);
   }
 
   /**
@@ -670,8 +677,8 @@ export class PixiRenderer {
    * @returns The generated texture.
    */
   private getIsoTileTexture(
-    kind: 'overworld' | 'dungeon' | 'town',
-    tile: string,
+    kind: IsoMode,
+    tile: IsoTile,
     theme: DungeonTheme | undefined,
     isoTileW: number,
     isoTileH: number,
@@ -784,17 +791,11 @@ export class PixiRenderer {
    * @param isoTileH The height of the isometric tile.
    * @returns
    */
-  private applyIsoTileDetail(
-    ctx: CanvasRenderingContext2D,
-    kind: 'overworld' | 'dungeon' | 'town',
-    tile: string,
-    isoTileW: number,
-    isoTileH: number
-  ): void {
+  private applyIsoTileDetail(ctx: CanvasRenderingContext2D, kind: IsoMode, tile: IsoTile, isoTileW: number, isoTileH: number): void {
     if (this.isoTileSpriteKey(kind, tile, undefined)) {
       return;
     }
-    if (kind !== 'overworld') {
+    if (kind !== Mode.Overworld) {
       return;
     }
 
@@ -809,12 +810,12 @@ export class PixiRenderer {
     ctx.closePath();
     ctx.clip();
 
-    if (tile === 'grass') {
+    if (tile === OverworldTile.Grass) {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
       for (let i: number = 0; i < 18; i += 1) {
         ctx.fillRect((i * 7) % w, (i * 11) % h, 2, 1);
       }
-    } else if (tile === 'forest') {
+    } else if (tile === OverworldTile.Forest) {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
       for (let i: number = 0; i < 8; i += 1) {
         const x: number = (i * 11) % w;
@@ -838,7 +839,7 @@ export class PixiRenderer {
       ctx.fillStyle = 'rgba(56, 38, 24, 0.8)';
       ctx.fillRect(w * 0.32, h * 0.68, w * 0.03, h * 0.12);
       ctx.fillRect(w * 0.62, h * 0.64, w * 0.03, h * 0.13);
-    } else if (tile === 'water' || tile === 'water_deep') {
+    } else if (tile === OverworldTile.Water || tile === OverworldTile.WaterDeep) {
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
       ctx.lineWidth = 1;
       for (let i: number = 0; i < 4; i += 1) {
@@ -848,7 +849,7 @@ export class PixiRenderer {
         ctx.lineTo(w * 0.9, y - h * 0.06);
         ctx.stroke();
       }
-    } else if (tile === 'mountain' || tile === 'mountain_snow') {
+    } else if (tile === OverworldTile.Mountain || tile === OverworldTile.MountainSnow) {
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
       ctx.lineWidth = 1;
       for (let i: number = 0; i < 5; i += 1) {
@@ -858,11 +859,11 @@ export class PixiRenderer {
         ctx.lineTo(w * 0.85, y + h * 0.04);
         ctx.stroke();
       }
-      if (tile === 'mountain_snow') {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+      if (tile === OverworldTile.MountainSnow) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
         ctx.fillRect(w * 0.25, h * 0.15, w * 0.5, h * 0.15);
       }
-    } else if (tile === 'cave') {
+    } else if (tile === OverworldTile.Cave) {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
       ctx.beginPath();
       ctx.ellipse(w * 0.5, h * 0.6, w * 0.16, h * 0.12, 0, 0, Math.PI * 2);
@@ -897,141 +898,147 @@ export class PixiRenderer {
    * @param theme The theme of the dungeon, if applicable.
    * @returns An object containing the base and edge colors for the tile.
    */
-  private isoTileColors(kind: 'overworld' | 'dungeon' | 'town', tile: string, theme: DungeonTheme | undefined): { base: string; edge: string } {
-    if (kind === 'overworld') {
-      switch (tile) {
-        case 'water':
+  private isoTileColors(kind: IsoMode, tile: IsoTile, theme: DungeonTheme | undefined): { base: string; edge: string } {
+    if (kind === Mode.Overworld) {
+      const overworldTile: OverworldTile = tile as OverworldTile;
+      switch (overworldTile) {
+        case OverworldTile.Water:
           return { base: '#0c2f4a', edge: '#0f496d' };
-        case 'water_deep':
+        case OverworldTile.WaterDeep:
           return { base: '#071d2e', edge: '#0b2b44' };
-        case 'forest':
+        case OverworldTile.Forest:
           return { base: '#0e2a1b', edge: '#184a2f' };
-        case 'mountain':
+        case OverworldTile.Mountain:
           return { base: '#3a3f46', edge: '#555b63' };
-        case 'mountain_snow':
-          return { base: '#b9c2cd', edge: '#dde3ea' };
-        case 'road':
+        case OverworldTile.MountainSnow:
+          return { base: '#f4f8ff', edge: '#ffffff' };
+        case OverworldTile.Road:
           return { base: '#4f5359', edge: '#6b727a' };
-        case 'cave':
+        case OverworldTile.Cave:
           return { base: '#2a2c2f', edge: '#3b3f45' };
-        case 'town_shop':
-        case 'town_tavern':
-        case 'town_smith':
-        case 'town_house':
+        case OverworldTile.TownShop:
+        case OverworldTile.TownTavern:
+        case OverworldTile.TownSmith:
+        case OverworldTile.TownHouse:
           return { base: '#3b2f23', edge: '#4a3a2b' };
-        case 'town':
-        case 'grass':
+        case OverworldTile.Town:
+        case OverworldTile.Grass:
         default:
           return { base: '#1f3a24', edge: '#2f5433' };
       }
     }
 
-    if (kind === 'town') {
-      switch (tile) {
-        case 'road':
+    if (kind === Mode.Town) {
+      const townTile: TownTile = tile as TownTile;
+      switch (townTile) {
+        case TownTile.Road:
           return { base: '#2b241d', edge: '#3a2f25' };
-        case 'square':
+        case TownTile.Square:
           return { base: '#2f2924', edge: '#3d352f' };
-        case 'gate':
-        case 'wall':
+        case TownTile.Gate:
+        case TownTile.Wall:
           return { base: '#2a2430', edge: '#3a3242' };
-        case 'shop':
-        case 'tavern':
-        case 'smith':
-        case 'house':
+        case TownTile.Shop:
+        case TownTile.Tavern:
+        case TownTile.Smith:
+        case TownTile.House:
           return { base: '#2f2720', edge: '#3f352b' };
-        case 'floor':
+        case TownTile.Floor:
         default:
           return { base: '#1d1a16', edge: '#2b241d' };
       }
     }
 
-    const palette = themePalette(theme ?? 'ruins');
-    switch (tile) {
-      case 'wall':
+    const palette = themePalette(theme ?? DungeonTheme.Ruins);
+    const dungeonTile: DungeonTile = tile as DungeonTile;
+    switch (dungeonTile) {
+      case DungeonTile.Wall:
         return { base: palette.wall, edge: palette.stairs };
-      case 'stairsUp':
-      case 'stairsDown':
+      case DungeonTile.StairsUp:
+      case DungeonTile.StairsDown:
         return { base: palette.stairs, edge: palette.glyph };
-      case 'bossFloor':
+      case DungeonTile.BossFloor:
         return { base: palette.floor, edge: '#7f6b4a' };
-      case 'floor':
+      case DungeonTile.Floor:
       default:
         return { base: palette.floor, edge: '#2a3340' };
     }
   }
 
-  private isoTileSpriteKey(kind: 'overworld' | 'dungeon' | 'town', tile: string, theme: DungeonTheme | undefined): SpriteKey | undefined {
-    if (kind === 'overworld') {
-      switch (tile) {
-        case 'water':
+  private isoTileSpriteKey(kind: IsoMode, tile: IsoTile, theme: DungeonTheme | undefined): SpriteKey | undefined {
+    if (kind === Mode.Overworld) {
+      const overworldTile: OverworldTile = tile as OverworldTile;
+      switch (overworldTile) {
+        case OverworldTile.Water:
           return 'ow_water';
-        case 'water_deep':
+        case OverworldTile.WaterDeep:
           return 'ow_water_deep';
-        case 'grass':
+        case OverworldTile.Grass:
           return 'ow_grass';
-        case 'forest':
+        case OverworldTile.Forest:
           return 'ow_forest';
-        case 'mountain':
+        case OverworldTile.Mountain:
           return 'ow_mountain';
-        case 'mountain_snow':
+        case OverworldTile.MountainSnow:
           return 'ow_mountain_snow';
-        case 'road':
+        case OverworldTile.Road:
           return 'ow_road';
-        case 'town_shop':
+        case OverworldTile.TownShop:
           return 'ow_town_shop';
-        case 'town_tavern':
+        case OverworldTile.TownTavern:
           return 'ow_town_tavern';
-        case 'town_smith':
+        case OverworldTile.TownSmith:
           return 'ow_town_smith';
-        case 'town_house':
+        case OverworldTile.TownHouse:
           return 'ow_town_house';
-        case 'dungeon':
+        case OverworldTile.Dungeon:
           return 'ow_dungeon';
-        case 'cave':
+        case OverworldTile.Cave:
           return 'ow_cave';
-        case 'town':
+        case OverworldTile.Town:
           return 'ow_town';
         default:
           return undefined;
       }
     }
 
-    if (kind === 'town') {
-      switch (tile) {
-        case 'floor':
+    if (kind === Mode.Town) {
+      const townTile: TownTile = tile as TownTile;
+      switch (townTile) {
+        case TownTile.Floor:
           return 'tn_floor';
-        case 'wall':
+        case TownTile.Wall:
           return 'tn_wall';
-        case 'road':
+        case TownTile.Road:
           return 'tn_road';
-        case 'square':
+        case TownTile.Square:
           return 'tn_square';
-        case 'gate':
+        case TownTile.Gate:
           return 'tn_gate';
-        case 'shop':
+        case TownTile.Shop:
           return 'tn_shop';
-        case 'tavern':
+        case TownTile.Tavern:
           return 'tn_tavern';
-        case 'smith':
+        case TownTile.Smith:
           return 'tn_smith';
-        case 'house':
+        case TownTile.House:
           return 'tn_house';
         default:
           return undefined;
       }
     }
 
-    const suffix: string = theme === 'caves' ? 'caves' : theme === 'crypt' ? 'crypt' : 'ruins';
-    switch (tile) {
-      case 'wall':
+    const suffix: string = theme === DungeonTheme.Caves ? 'caves' : theme === DungeonTheme.Crypt ? 'crypt' : 'ruins';
+    const dungeonTile: DungeonTile = tile as DungeonTile;
+    switch (dungeonTile) {
+      case DungeonTile.Wall:
         return `dg_wall_${suffix}` as SpriteKey;
-      case 'floor':
+      case DungeonTile.Floor:
         return `dg_floor_${suffix}` as SpriteKey;
-      case 'bossFloor':
+      case DungeonTile.BossFloor:
         return `dg_boss_floor_${suffix}` as SpriteKey;
-      case 'stairsUp':
-      case 'stairsDown':
+      case DungeonTile.StairsUp:
+      case DungeonTile.StairsDown:
         return `dg_stairs_${suffix}` as SpriteKey;
       default:
         return undefined;
@@ -1045,21 +1052,21 @@ export class PixiRenderer {
    * @param isoTileH The height of the isometric tile.
    * @returns The height of the isometric tile at the given position.
    */
-  private isoTileHeight(kind: 'overworld' | 'dungeon' | 'town', tile: string, isoTileH: number): number {
+  private isoTileHeight(kind: IsoMode, tile: IsoTile, isoTileH: number): number {
     const low: number = Math.max(2, Math.floor(isoTileH * 0.2));
     const high: number = Math.max(5, Math.floor(isoTileH * 0.8));
 
-    if (kind === 'dungeon') {
-      return tile === 'wall' ? high : low;
+    if (kind === Mode.Dungeon) {
+      return tile === DungeonTile.Wall ? high : low;
     }
-    if (kind === 'town') {
-      return tile === 'wall' ? high : low;
+    if (kind === Mode.Town) {
+      return tile === TownTile.Wall ? high : low;
     }
-    if (kind === 'overworld') {
-      if (tile === 'mountain' || tile === 'mountain_snow') {
+    if (kind === Mode.Overworld) {
+      if (tile === OverworldTile.Mountain || tile === OverworldTile.MountainSnow) {
         return high;
       }
-      if (tile === 'water') {
+      if (tile === OverworldTile.Water) {
         return 0;
       }
       return low;
@@ -1373,21 +1380,21 @@ export class PixiRenderer {
         continue;
       }
 
-      if (ctx.mode === 'overworld') {
-        if (it.mapRef.kind !== 'overworld') {
+      if (ctx.mode === Mode.Overworld) {
+        if (it.mapRef.kind !== Mode.Overworld) {
           continue;
         }
-      } else if (ctx.mode === 'dungeon') {
+      } else if (ctx.mode === Mode.Dungeon) {
         const dungeon: Dungeon | undefined = ctx.dungeon;
         if (!dungeon) {
           continue;
         }
-        if (it.mapRef.kind !== 'dungeon' || it.mapRef.dungeonId !== dungeon.id) {
+        if (it.mapRef.kind !== Mode.Dungeon || it.mapRef.dungeonId !== dungeon.id) {
           continue;
         }
         if (ctx.useFov) {
           const vis = getVisibility(dungeon, it.pos.x, it.pos.y);
-          if (vis !== 'visible') {
+          if (vis !== TileVisibility.Visible) {
             continue;
           }
         }
@@ -1396,7 +1403,7 @@ export class PixiRenderer {
         if (!town) {
           continue;
         }
-        if (it.mapRef.kind !== 'town' || it.mapRef.townId !== town.id) {
+        if (it.mapRef.kind !== Mode.Town || it.mapRef.townId !== town.id) {
           continue;
         }
       }
@@ -1405,14 +1412,14 @@ export class PixiRenderer {
       if (!screen) {
         continue;
       }
-      const spriteKey: SpriteKey = it.kind === 'potion' ? 'it_potion' : it.kind === 'weapon' ? 'it_weapon' : 'it_armor';
+      const spriteKey: SpriteKey = it.kind === ItemKind.Potion ? 'it_potion' : it.kind === ItemKind.Weapon ? 'it_weapon' : 'it_armor';
       const sprite = new Sprite(this.getTexture(spriteKey));
       const bob: number = Math.sin(now / 320 + this.phaseFromId(it.id)) * 0.6;
       sprite.x = screen.x;
       sprite.y = screen.y + bob;
       sprite.width = this.tileSize;
       sprite.height = this.tileSize;
-      if (ctx.mode === 'dungeon') {
+      if (ctx.mode === Mode.Dungeon) {
         const dist: number = Math.max(Math.abs(it.pos.x - originX), Math.abs(it.pos.y - originY));
         sprite.alpha = this.lightFalloff(dist, lightRadius);
       }
@@ -1440,25 +1447,25 @@ export class PixiRenderer {
     now: number
   ): void {
     for (const entity of ctx.entities) {
-      if (entity.kind !== 'monster' || entity.hp <= 0) {
+      if (entity.kind !== EntityKind.Monster || entity.hp <= 0) {
         continue;
       }
 
-      if (ctx.mode === 'overworld') {
-        if (entity.mapRef.kind !== 'overworld') {
+      if (ctx.mode === Mode.Overworld) {
+        if (entity.mapRef.kind !== Mode.Overworld) {
           continue;
         }
-      } else if (ctx.mode === 'dungeon') {
+      } else if (ctx.mode === Mode.Dungeon) {
         const dungeon: Dungeon | undefined = ctx.dungeon;
         if (!dungeon) {
           continue;
         }
-        if (entity.mapRef.kind !== 'dungeon' || entity.mapRef.dungeonId !== dungeon.id) {
+        if (entity.mapRef.kind !== Mode.Dungeon || entity.mapRef.dungeonId !== dungeon.id) {
           continue;
         }
         if (ctx.useFov) {
           const vis = getVisibility(dungeon, entity.pos.x, entity.pos.y);
-          if (vis !== 'visible') {
+          if (vis !== TileVisibility.Visible) {
             continue;
           }
         }
@@ -1467,7 +1474,7 @@ export class PixiRenderer {
         if (!town) {
           continue;
         }
-        if (entity.mapRef.kind !== 'town' || entity.mapRef.townId !== town.id) {
+        if (entity.mapRef.kind !== Mode.Town || entity.mapRef.townId !== town.id) {
           continue;
         }
       }
@@ -1483,7 +1490,7 @@ export class PixiRenderer {
       sprite.y = screen.y + sway;
       sprite.width = this.tileSize;
       sprite.height = this.tileSize;
-      if (ctx.mode === 'dungeon') {
+      if (ctx.mode === Mode.Dungeon) {
         const dist: number = Math.max(Math.abs(entity.pos.x - originX), Math.abs(entity.pos.y - originY));
         sprite.alpha = this.lightFalloff(dist, lightRadius);
       }
@@ -1844,35 +1851,35 @@ export class PixiRenderer {
    * @param tile The overworld tile id.
    * @returns The sprite key for the tile.
    */
-  private overworldKey(tile: string): SpriteKey {
+  private overworldKey(tile: OverworldTile): SpriteKey {
     switch (tile) {
-      case 'water':
+      case OverworldTile.Water:
         return 'ow_water';
-      case 'water_deep':
+      case OverworldTile.WaterDeep:
         return 'ow_water_deep';
-      case 'grass':
+      case OverworldTile.Grass:
         return 'ow_grass';
-      case 'forest':
+      case OverworldTile.Forest:
         return 'ow_forest';
-      case 'mountain':
+      case OverworldTile.Mountain:
         return 'ow_mountain';
-      case 'mountain_snow':
+      case OverworldTile.MountainSnow:
         return 'ow_mountain_snow';
-      case 'road':
+      case OverworldTile.Road:
         return 'ow_road';
-      case 'town_shop':
+      case OverworldTile.TownShop:
         return 'ow_town_shop';
-      case 'town_tavern':
+      case OverworldTile.TownTavern:
         return 'ow_town_tavern';
-      case 'town_smith':
+      case OverworldTile.TownSmith:
         return 'ow_town_smith';
-      case 'town_house':
+      case OverworldTile.TownHouse:
         return 'ow_town_house';
-      case 'town':
+      case OverworldTile.Town:
         return 'ow_town';
-      case 'dungeon':
+      case OverworldTile.Dungeon:
         return 'ow_dungeon';
-      case 'cave':
+      case OverworldTile.Cave:
         return 'ow_cave';
       default:
         return 'ow_grass';
@@ -1884,25 +1891,25 @@ export class PixiRenderer {
    * @param tile The town tile id.
    * @returns The sprite key for the tile.
    */
-  private townKey(tile: string): SpriteKey {
+  private townKey(tile: TownTile): SpriteKey {
     switch (tile) {
-      case 'wall':
+      case TownTile.Wall:
         return 'tn_wall';
-      case 'road':
+      case TownTile.Road:
         return 'tn_road';
-      case 'square':
+      case TownTile.Square:
         return 'tn_square';
-      case 'gate':
+      case TownTile.Gate:
         return 'tn_gate';
-      case 'shop':
+      case TownTile.Shop:
         return 'tn_shop';
-      case 'tavern':
+      case TownTile.Tavern:
         return 'tn_tavern';
-      case 'smith':
+      case TownTile.Smith:
         return 'tn_smith';
-      case 'house':
+      case TownTile.House:
         return 'tn_house';
-      case 'floor':
+      case TownTile.Floor:
       default:
         return 'tn_floor';
     }
@@ -1914,19 +1921,19 @@ export class PixiRenderer {
    * @param tile The dungeon tile id.
    * @returns The sprite key for the tile.
    */
-  private dungeonKey(theme: DungeonTheme, tile: string): SpriteKey {
+  private dungeonKey(theme: DungeonTheme, tile: DungeonTile): SpriteKey {
     switch (tile) {
-      case 'wall':
-        return theme === 'caves' ? 'dg_wall_caves' : theme === 'crypt' ? 'dg_wall_crypt' : 'dg_wall_ruins';
-      case 'floor':
-        return theme === 'caves' ? 'dg_floor_caves' : theme === 'crypt' ? 'dg_floor_crypt' : 'dg_floor_ruins';
-      case 'bossFloor':
-        return theme === 'caves' ? 'dg_boss_floor_caves' : theme === 'crypt' ? 'dg_boss_floor_crypt' : 'dg_boss_floor_ruins';
-      case 'stairsUp':
-      case 'stairsDown':
-        return theme === 'caves' ? 'dg_stairs_caves' : theme === 'crypt' ? 'dg_stairs_crypt' : 'dg_stairs_ruins';
+      case DungeonTile.Wall:
+        return theme === DungeonTheme.Caves ? 'dg_wall_caves' : theme === DungeonTheme.Crypt ? 'dg_wall_crypt' : 'dg_wall_ruins';
+      case DungeonTile.Floor:
+        return theme === DungeonTheme.Caves ? 'dg_floor_caves' : theme === DungeonTheme.Crypt ? 'dg_floor_crypt' : 'dg_floor_ruins';
+      case DungeonTile.BossFloor:
+        return theme === DungeonTheme.Caves ? 'dg_boss_floor_caves' : theme === DungeonTheme.Crypt ? 'dg_boss_floor_crypt' : 'dg_boss_floor_ruins';
+      case DungeonTile.StairsUp:
+      case DungeonTile.StairsDown:
+        return theme === DungeonTheme.Caves ? 'dg_stairs_caves' : theme === DungeonTheme.Crypt ? 'dg_stairs_crypt' : 'dg_stairs_ruins';
       default:
-        return theme === 'caves' ? 'dg_floor_caves' : theme === 'crypt' ? 'dg_floor_crypt' : 'dg_floor_ruins';
+        return theme === DungeonTheme.Caves ? 'dg_floor_caves' : theme === DungeonTheme.Crypt ? 'dg_floor_crypt' : 'dg_floor_ruins';
     }
   }
 
@@ -1959,11 +1966,11 @@ export class PixiRenderer {
  */
 function themePalette(theme: DungeonTheme): { wall: string; floor: string; stairs: string; glyph: string } {
   switch (theme) {
-    case 'ruins':
+    case DungeonTheme.Ruins:
       return { wall: '#202a36', floor: '#0b1320', stairs: '#15243a', glyph: '#cfe3ff' };
-    case 'caves':
+    case DungeonTheme.Caves:
       return { wall: '#1f2a20', floor: '#0a130c', stairs: '#17301a', glyph: '#cfe3ff' };
-    case 'crypt':
+    case DungeonTheme.Crypt:
       return { wall: '#2a1a2f', floor: '#120914', stairs: '#2c1231', glyph: '#e6d7ff' };
     default:
       return { wall: '#1b2430', floor: '#0b1320', stairs: '#122033', glyph: '#cfe3ff' };

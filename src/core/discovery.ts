@@ -1,8 +1,13 @@
+import { OverworldTile } from './types';
 import type { Point } from './types';
 import type { Overworld } from '../maps/overworld';
 import { t } from '../i18n';
 
-export type DiscoveredPoiKind = 'town' | 'dungeon' | 'cave';
+export enum DiscoveredPoiKind {
+  Town = 'town',
+  Dungeon = 'dungeon',
+  Cave = 'cave'
+}
 
 export type DiscoveredPoi = {
   id: string;
@@ -31,12 +36,13 @@ export function poiId(kind: DiscoveredPoiKind, pos: Point): string {
  * @returns True if a new POI is discovered.
  */
 export function maybeDiscoverPois(overworld: Overworld, playerPos: Point, discovered: DiscoveredPoi[], turnCounter: number): boolean {
-  const tile: string = overworld.getTile(playerPos.x, playerPos.y);
-  if (tile !== 'town' && tile !== 'dungeon' && tile !== 'cave') {
+  const tile: OverworldTile = overworld.getTile(playerPos.x, playerPos.y);
+  if (tile !== OverworldTile.Town && tile !== OverworldTile.Dungeon && tile !== OverworldTile.Cave) {
     return false;
   }
 
-  const kind: DiscoveredPoiKind = tile === 'town' ? 'town' : tile === 'cave' ? 'cave' : 'dungeon';
+  const kind: DiscoveredPoiKind =
+    tile === OverworldTile.Town ? DiscoveredPoiKind.Town : tile === OverworldTile.Cave ? DiscoveredPoiKind.Cave : DiscoveredPoiKind.Dungeon;
   const id: string = poiId(kind, playerPos);
   if (discovered.some((p) => p.id === id)) {
     return false;
@@ -44,7 +50,11 @@ export function maybeDiscoverPois(overworld: Overworld, playerPos: Point, discov
 
   const count: number = discovered.filter((p) => p.kind === kind).length + 1;
   const name: string =
-    kind === 'town' ? t('poi.town', { num: count }) : kind === 'cave' ? t('poi.cave', { num: count }) : t('poi.dungeon', { num: count });
+    kind === DiscoveredPoiKind.Town
+      ? t('poi.town', { num: count })
+      : kind === DiscoveredPoiKind.Cave
+        ? t('poi.cave', { num: count })
+        : t('poi.dungeon', { num: count });
 
   discovered.push({ id, kind, name, pos: { x: playerPos.x, y: playerPos.y }, discoveredTurn: turnCounter });
   return true;

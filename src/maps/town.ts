@@ -1,4 +1,5 @@
-import type { Point, TownTile } from '../core/types';
+import { TownTile } from '../core/types';
+import type { Point } from '../core/types';
 
 export type Town = {
   id: string;
@@ -36,7 +37,7 @@ export function getTownTile(town: Town, x: number, y: number): TownTile {
  * @returns True if walkable.
  */
 export function isTownWalkable(tile: TownTile): boolean {
-  return tile !== 'wall';
+  return tile !== TownTile.Wall;
 }
 
 /**
@@ -48,37 +49,37 @@ export function isTownWalkable(tile: TownTile): boolean {
 export function generateTown(townId: string, seed: number): Town {
   const width: number = 21;
   const height: number = 15;
-  const tiles: TownTile[] = new Array<TownTile>(width * height).fill('wall');
+  const tiles: TownTile[] = new Array<TownTile>(width * height).fill(TownTile.Wall);
 
   for (let y: number = 1; y < height - 1; y++) {
     for (let x: number = 1; x < width - 1; x++) {
-      tiles[idx(x, y, width)] = 'floor';
+      tiles[idx(x, y, width)] = TownTile.Floor;
     }
   }
 
   const gateX: number = Math.floor(width / 2);
   const gateY: number = height - 2;
-  tiles[idx(gateX, gateY, width)] = 'gate';
+  tiles[idx(gateX, gateY, width)] = TownTile.Gate;
 
   const centerX: number = Math.floor(width / 2);
   const centerY: number = Math.floor(height / 2);
   for (let y: number = centerY - 1; y <= centerY + 1; y++) {
     for (let x: number = centerX - 1; x <= centerX + 1; x++) {
-      tiles[idx(x, y, width)] = 'square';
+      tiles[idx(x, y, width)] = TownTile.Square;
     }
   }
 
   for (let y: number = gateY; y >= centerY - 1; y--) {
-    tiles[idx(centerX, y, width)] = 'road';
+    tiles[idx(centerX, y, width)] = TownTile.Road;
   }
   for (let x: number = 2; x <= width - 3; x++) {
-    tiles[idx(x, centerY, width)] = 'road';
+    tiles[idx(x, centerY, width)] = TownTile.Road;
   }
 
-  placeBuilding(tiles, width, 2, 2, 4, 3, 'shop');
-  placeBuilding(tiles, width, width - 6, 2, 4, 3, 'tavern');
-  placeBuilding(tiles, width, 2, height - 5, 4, 3, 'smith');
-  placeBuilding(tiles, width, width - 6, height - 5, 4, 3, 'house');
+  placeBuilding(tiles, width, 2, 2, 4, 3, TownTile.Shop);
+  placeBuilding(tiles, width, width - 6, 2, 4, 3, TownTile.Tavern);
+  placeBuilding(tiles, width, 2, height - 5, 4, 3, TownTile.Smith);
+  placeBuilding(tiles, width, width - 6, height - 5, 4, 3, TownTile.House);
 
   return {
     id: townId,
