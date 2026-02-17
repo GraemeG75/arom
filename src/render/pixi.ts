@@ -8,6 +8,7 @@ import { getTownTile } from '../maps/town';
 import type { Town } from '../maps/town';
 import { SpriteAtlas, type SpriteKey } from './sprites';
 import { t } from '../i18n';
+import { OVERWORLD_HEIGHT } from '../core/const';
 
 type PixiRenderContext = {
   mode: IsoMode;
@@ -1064,6 +1065,9 @@ export class PixiRenderer {
     }
     if (kind === Mode.Overworld) {
       if (tile === OverworldTile.Mountain || tile === OverworldTile.MountainSnow) {
+        if (tile === OverworldTile.MountainSnow) {
+          return Math.max(high, Math.floor(high * OVERWORLD_HEIGHT.mountainSnowMultiplier));
+        }
         return high;
       }
       if (tile === OverworldTile.Water) {

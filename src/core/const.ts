@@ -54,3 +54,7 @@ export const COMBAT = {
   wraithDefMultiplier: 0.3,
   wraithHealRatio: 0.6
 };
+
+export const OVERWORLD_HEIGHT = {
+  mountainSnowMultiplier: 2
+};
