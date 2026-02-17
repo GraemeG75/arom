@@ -8,7 +8,7 @@ import { getTownTile } from '../maps/town';
 import type { Town } from '../maps/town';
 import { SpriteAtlas, type SpriteKey } from './sprites';
 import { t } from '../i18n';
-import { OVERWORLD_HEIGHT } from '../core/const';
+import { OVERWORLD_HEIGHT, RENDER_RESOLUTION, RENDER_TILE_SIZE } from '../core/const';
 
 type PixiRenderContext = {
   mode: IsoMode;
@@ -80,7 +80,7 @@ export class PixiRenderer {
    */
   public constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
-    this.tileSize = 16;
+    this.tileSize = RENDER_TILE_SIZE;
     this.atlas = new SpriteAtlas(this.tileSize);
     this.atlas.onUpdate = () => {
       this.textures.clear();
@@ -116,7 +116,8 @@ export class PixiRenderer {
         height: canvas.height || this.tileSize,
         backgroundAlpha: 0,
         antialias: false,
-        autoDensity: true
+        autoDensity: true,
+        resolution: RENDER_RESOLUTION
       })
       .then(() => {
         this.app.ticker.stop();

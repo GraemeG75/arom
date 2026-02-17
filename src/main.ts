@@ -46,7 +46,16 @@ import { MessageLog } from './ui/log';
 import { loadFromBase62String, loadFromLocalStorage, saveToLocalStorage, serializeSaveDataBase62, type SaveDataV3 } from './core/save';
 import { renderPanelHtml } from './ui/panel';
 import { hash2D } from './core/hash';
-import { AMBUSH_CHANCE, BOSS_MIN_DEPTH, COMBAT, LEVEL_XP_BASE, LEVEL_XP_PER_LEVEL, MONSTER_SPAWN, SHOP_RESTOCK_INTERVAL } from './core/const';
+import {
+  AMBUSH_CHANCE,
+  BOSS_MIN_DEPTH,
+  COMBAT,
+  LEVEL_XP_BASE,
+  LEVEL_XP_PER_LEVEL,
+  MONSTER_SPAWN,
+  RENDER_TILE_SIZE,
+  SHOP_RESTOCK_INTERVAL
+} from './core/const';
 import { t } from './i18n';
 
 type RendererMode = PixiRenderMode;
@@ -925,7 +934,7 @@ canvasWrap.classList.add('displayNone');
  * @returns The view size in tiles.
  */
 function getPixiViewSize(): { w: number; h: number } {
-  const tileSize: number = 16;
+  const tileSize: number = RENDER_TILE_SIZE;
   const widthPx: number = Math.max(1, Math.floor(canvas.width));
   const heightPx: number = Math.max(1, Math.floor(canvas.height));
   const w: number = Math.max(1, Math.floor(widthPx / tileSize));
