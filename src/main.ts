@@ -1,16 +1,20 @@
 import {
+  ActionKind,
   CharacterClass,
   DungeonTile,
+  EntityKind,
   GearRarity,
+  Gender,
   ItemKind,
   Mode,
   PanelMode,
+  QuestKind,
   ShopSpecialty,
+  StatusEffectKind,
   TownTile,
   type Action,
   type CharacterStory,
   type Entity,
-  type Gender,
   type Item,
   type Point,
   type Shop,
@@ -28,22 +32,22 @@ import {
   townIdFromWorldPos,
   townSeedFromWorldPos
 } from './maps/overworld';
-import type { Dungeon, DungeonLayout, DungeonTheme } from './maps/dungeon';
-import { generateDungeon, getDungeonTile, randomFloorPoint } from './maps/dungeon';
+import type { Dungeon, DungeonTheme } from './maps/dungeon';
+import { DungeonLayout, generateDungeon, getDungeonTile, randomFloorPoint } from './maps/dungeon';
 import type { Town } from './maps/town';
 import { generateTown, getTownTile } from './maps/town';
-import { computeDungeonFov, decayVisibilityToSeen } from './systems/fov';
+import { FieldOfView } from './systems/fov';
 import { canEnterDungeonTile, canEnterOverworldTile, canEnterTownTile, isBlockedByEntity } from './systems/rules';
-import { nextMonsterStep } from './systems/ai';
-import { PixiRenderer } from './render/pixi';
+import { MonsterAI } from './systems/ai';
+import { OverworldNavigator } from './systems/navigation';
+import { PixiRenderer, PixiRenderMode } from './render/pixi';
 import { MessageLog } from './ui/log';
 import { loadFromBase62String, loadFromLocalStorage, saveToLocalStorage, serializeSaveDataBase62, type SaveDataV3 } from './core/save';
 import { renderPanelHtml } from './ui/panel';
-import { aStar } from './systems/astar';
 import { hash2D } from './core/hash';
 import { t } from './i18n';
 
-type RendererMode = 'canvas' | 'isometric';
+type RendererMode = PixiRenderMode;
 
 type DungeonStackFrame = {
   baseId: string;
@@ -897,8 +901,8 @@ type SaveModalMode = 'export' | 'import';
 let saveModalMode: SaveModalMode = 'export';
 
 let pendingSeed: number = Date.now() & 0xffffffff;
-let pendingClass: CharacterClass = 'warrior';
-let pendingGender: Gender = 'female';
+let pendingClass: CharacterClass = CharacterClass.Warrior;
+let pendingGender: Gender = Gender.Female;
 let pendingName: string = '';
 canvasWrap.classList.add('displayNone');
 
@@ -963,9 +967,9 @@ function applyStaticI18n(): void {
   nameErrorEl.textContent = '';
 
   const genderOptions: Array<{ key: Gender; label: string }> = [
-    { key: 'female', label: t('gender.female') },
-    { key: 'male', label: t('gender.male') },
-    { key: 'nonbinary', label: t('gender.nonbinary') }
+    { key: Gender.Female, label: t('gender.female') },
+    { key: Gender.Male, label: t('gender.male') },
+    { key: Gender.Nonbinary, label: t('gender.nonbinary') }
   ];
   genderSelect.innerHTML = '';
   for (const option of genderOptions) {
@@ -1063,7 +1067,7 @@ function newGame(worldSeed: number, classChoice: CharacterClass, gender: Gender,
 
   const player: Entity = {
     id: 'player',
-    kind: 'player',
+    kind: EntityKind.Player,
     name,
     glyph: '@',
     pos: findStartPosition(overworld, rng),
@@ -1101,7 +1105,7 @@ function newGame(worldSeed: number, classChoice: CharacterClass, gender: Gender,
     entities: [player],
     items: [],
     shops: new Map<string, Shop>(),
-    rendererMode: 'isometric',
+    rendererMode: PixiRenderMode.Isometric,
     useFov: true,
     activePanel: PanelMode.None,
     shopCategory: ShopSpecialty.All,
@@ -1140,6 +1144,7 @@ function findStartPosition(overworld: Overworld, rng: Rng): Point {
 }
 
 let state: GameState = newGame(pendingSeed, pendingClass, pendingGender, pendingName);
+let overworldNavigator: OverworldNavigator = new OverworldNavigator(state.overworld);
 
 /**
  * Hides the class selection modal.
@@ -1198,6 +1203,8 @@ function startNewRun(classChoice: CharacterClass): void {
   nameInput.classList.remove('invalid');
   nameErrorEl.textContent = '';
   state = newGame(pendingSeed, classChoice, gender, name);
+  overworldNavigator = new OverworldNavigator(state.overworld);
+  combat.setState(state);
   hideClassModal();
   syncRendererUi();
   render();
@@ -1244,7 +1251,7 @@ function ensureDungeonLevel(s: GameState, baseId: string, depth: number, entranc
   }
 
   const baseSeed: number =
-    layout === 'caves'
+    layout === DungeonLayout.Caves
       ? caveSeedFromWorldPos(s.worldSeed, entranceWorldPos.x, entranceWorldPos.y)
       : dungeonSeedFromWorldPos(s.worldSeed, entranceWorldPos.x, entranceWorldPos.y);
   const levelSeed: number = (baseSeed ^ (depth * 0x9e3779b9)) | 0;
@@ -1315,7 +1322,7 @@ function createMonsterForDepth(depth: number, roll: number, rng: Rng, dungeonId:
   if (roll < 30) {
     return {
       id: `m_${dungeonId}_${i}`,
-      kind: 'monster',
+      kind: EntityKind.Monster,
       name: monsterName('slime'),
       glyph: 's',
       pos: p,
@@ -1335,7 +1342,7 @@ function createMonsterForDepth(depth: number, roll: number, rng: Rng, dungeonId:
   if (roll < 60) {
     return {
       id: `m_${dungeonId}_${i}`,
-      kind: 'monster',
+      kind: EntityKind.Monster,
       name: monsterName('goblin'),
       glyph: 'g',
       pos: p,
@@ -1355,7 +1362,7 @@ function createMonsterForDepth(depth: number, roll: number, rng: Rng, dungeonId:
   if (depth >= 2 && roll < 82) {
     return {
       id: `m_${dungeonId}_${i}`,
-      kind: 'monster',
+      kind: EntityKind.Monster,
       name: monsterName('wraith'),
       glyph: 'w',
       pos: p,
@@ -1376,7 +1383,7 @@ function createMonsterForDepth(depth: number, roll: number, rng: Rng, dungeonId:
 
   return {
     id: `m_${dungeonId}_${i}`,
-    kind: 'monster',
+    kind: EntityKind.Monster,
     name: monsterName('orc'),
     glyph: 'O',
     pos: p,
@@ -1446,7 +1453,7 @@ function spawnBossInDungeon(s: GameState, dungeon: Dungeon, seed: number): void 
   const hp: number = 24 + dungeon.depth * 7;
   const boss: Entity = {
     id: `boss_${dungeon.id}`,
-    kind: 'monster',
+    kind: EntityKind.Monster,
     name,
     glyph: 'B',
     pos: p,
@@ -1564,7 +1571,7 @@ function ensureQuestForTown(s: GameState, townPos: Point): void {
       const q: import('./core/types').Quest = {
         id: `q_${townId}_${i}`,
         townId,
-        kind: 'killMonsters',
+        kind: QuestKind.KillMonsters,
         description: t('quest.killMonsters.desc', { count: targetCount, depth: minDepth }),
         targetCount,
         currentCount: 0,
@@ -1594,7 +1601,7 @@ function ensureQuestForTown(s: GameState, townPos: Point): void {
       const q: import('./core/types').Quest = {
         id: `q_${townId}_${i}`,
         townId,
-        kind: 'slayMonster',
+        kind: QuestKind.SlayMonster,
         description: t('quest.slayMonsters.desc', { count: targetCount, target: targetLabel, depth: minDepth }),
         targetCount,
         currentCount: 0,
@@ -1619,7 +1626,7 @@ function ensureQuestForTown(s: GameState, townPos: Point): void {
       const q: import('./core/types').Quest = {
         id: `q_${townId}_${i}`,
         townId,
-        kind: 'reachDepth',
+        kind: QuestKind.ReachDepth,
         description: t('quest.reachDepth.desc', { depth: targetDepth }),
         targetCount: targetDepth,
         currentCount: 0,
@@ -1644,7 +1651,7 @@ function ensureQuestForTown(s: GameState, townPos: Point): void {
     const q: import('./core/types').Quest = {
       id: `q_${townId}_${i}`,
       townId,
-      kind: 'slayBoss',
+      kind: QuestKind.SlayBoss,
       description: t('quest.slayBoss.desc', { boss: bossName, depth: bossDepth }),
       targetCount: 1,
       currentCount: 0,
@@ -1838,7 +1845,7 @@ function createQuestRewardItem(s: GameState, rng: Rng, questId: string, power: n
  */
 function recordKillForQuests(s: GameState, dungeonDepth: number, monsterName: string, isBoss: boolean): void {
   for (const q of s.quests) {
-    if (q.kind !== 'killMonsters' && q.kind !== 'slayMonster' && q.kind !== 'slayBoss') {
+    if (q.kind !== QuestKind.KillMonsters && q.kind !== QuestKind.SlayMonster && q.kind !== QuestKind.SlayBoss) {
       continue;
     }
     if (q.completed || q.turnedIn) {
@@ -1847,10 +1854,10 @@ function recordKillForQuests(s: GameState, dungeonDepth: number, monsterName: st
     if (dungeonDepth < q.minDungeonDepth) {
       continue;
     }
-    if (q.kind === 'slayMonster' && q.targetMonster && q.targetMonster !== monsterName) {
+    if (q.kind === QuestKind.SlayMonster && q.targetMonster && q.targetMonster !== monsterName) {
       continue;
     }
-    if (q.kind === 'slayBoss') {
+    if (q.kind === QuestKind.SlayBoss) {
       if (!isBoss) {
         continue;
       }
@@ -1875,7 +1882,7 @@ function recordKillForQuests(s: GameState, dungeonDepth: number, monsterName: st
  */
 function recordDepthForQuests(s: GameState, dungeonDepth: number): void {
   for (const q of s.quests) {
-    if (q.kind !== 'reachDepth') {
+    if (q.kind !== QuestKind.ReachDepth) {
       continue;
     }
     if (q.completed || q.turnedIn) {
@@ -1902,7 +1909,7 @@ function applyStatusEffectsStartOfTurn(s: GameState): void {
   }
 
   for (const eff of effects) {
-    if (eff.kind === 'poison') {
+    if (eff.kind === StatusEffectKind.Poison) {
       s.player.hp -= eff.potency;
       s.log.push(t('log.poison.tick', { dmg: eff.potency, hp: Math.max(0, s.player.hp), maxHp: s.player.maxHp }));
     }
@@ -1931,12 +1938,12 @@ function maybeApplyPoisonFromAttacker(attacker: Entity): void {
   }
 
   const effects = state.player.statusEffects ?? [];
-  const existing = effects.find((e) => e.kind === 'poison');
+  const existing = effects.find((e) => e.kind === StatusEffectKind.Poison);
   if (existing) {
     existing.remainingTurns = Math.max(existing.remainingTurns, 5);
     existing.potency = Math.max(existing.potency, 1);
   } else {
-    effects.push({ kind: 'poison', remainingTurns: 5, potency: 1 });
+    effects.push({ kind: StatusEffectKind.Poison, remainingTurns: 5, potency: 1 });
   }
   state.player.statusEffects = effects;
   state.log.push(t('log.poisoned'));
@@ -2203,7 +2210,7 @@ function isStandingOnTownBuilding(): boolean {
  * @param s The game state.
  */
 function removeDeadEntities(s: GameState): void {
-  s.entities = s.entities.filter((e: Entity) => e.hp > 0 || e.kind === 'player');
+  s.entities = s.entities.filter((e: Entity) => e.hp > 0 || e.kind === EntityKind.Player);
 }
 
 /**
@@ -2211,28 +2218,28 @@ function removeDeadEntities(s: GameState): void {
  * @param action The action to handle.
  */
 function handleAction(action: Action): void {
-  if (action.kind === 'toggleRenderer') {
-    state.rendererMode = state.rendererMode === 'isometric' ? 'canvas' : 'isometric';
-    state.log.push(state.rendererMode === 'isometric' ? t('log.renderer.iso') : t('log.renderer.topdown'));
+  if (action.kind === ActionKind.ToggleRenderer) {
+    state.rendererMode = state.rendererMode === PixiRenderMode.Isometric ? PixiRenderMode.Canvas : PixiRenderMode.Isometric;
+    state.log.push(state.rendererMode === PixiRenderMode.Isometric ? t('log.renderer.iso') : t('log.renderer.topdown'));
     syncRendererUi();
     render();
     return;
   }
 
-  if (action.kind === 'toggleFov') {
+  if (action.kind === ActionKind.ToggleFov) {
     state.useFov = !state.useFov;
     state.log.push(state.useFov ? t('log.fov.on') : t('log.fov.off'));
     render();
     return;
   }
 
-  if (action.kind === 'toggleInventory') {
+  if (action.kind === ActionKind.ToggleInventory) {
     state.activePanel = state.activePanel === PanelMode.Inventory ? PanelMode.None : PanelMode.Inventory;
     render();
     return;
   }
 
-  if (action.kind === 'toggleShop') {
+  if (action.kind === ActionKind.ToggleShop) {
     if (state.activePanel === PanelMode.Shop) {
       state.activePanel = PanelMode.None;
       render();
@@ -2255,14 +2262,14 @@ function handleAction(action: Action): void {
     return;
   }
 
-  if (action.kind === 'toggleMap') {
+  if (action.kind === ActionKind.ToggleMap) {
     state.mapOpen = !state.mapOpen;
     state.log.push(state.mapOpen ? t('log.map.open') : t('log.map.closed'));
     render();
     return;
   }
 
-  if (action.kind === 'cancelAuto') {
+  if (action.kind === ActionKind.CancelAuto) {
     state.destination = undefined;
     state.autoPath = undefined;
     state.log.push(t('log.autoWalk.cancel'));
@@ -2270,7 +2277,7 @@ function handleAction(action: Action): void {
     return;
   }
 
-  if (action.kind === 'toggleQuest') {
+  if (action.kind === ActionKind.ToggleQuest) {
     if (state.activePanel === PanelMode.Quest) {
       state.activePanel = PanelMode.None;
       render();
@@ -2292,26 +2299,26 @@ function handleAction(action: Action): void {
     return;
   }
 
-  if (action.kind === 'toggleStory') {
+  if (action.kind === ActionKind.ToggleStory) {
     state.activePanel = state.activePanel === PanelMode.Story ? PanelMode.None : PanelMode.Story;
     render();
     return;
   }
 
-  if (action.kind === 'save') {
+  if (action.kind === ActionKind.Save) {
     doSave();
     render();
     return;
   }
 
-  if (action.kind === 'load') {
+  if (action.kind === ActionKind.Load) {
     doLoad();
     syncRendererUi();
     render();
     return;
   }
 
-  if (action.kind === 'help') {
+  if (action.kind === ActionKind.Help) {
     state.log.push(t('log.help'));
     render();
     return;
@@ -2353,7 +2360,7 @@ function playerTurn(action: Action): boolean {
 
   if (state.mode === Mode.Overworld && state.autoPath && state.autoPath.length >= 2) {
     // If the player presses a time-advancing key (move or space), advance one step along the path.
-    if (action.kind === 'move' || action.kind === 'wait') {
+    if (action.kind === ActionKind.Move || action.kind === ActionKind.Wait) {
       const next: Point = state.autoPath[1];
       if (!canEnterOverworldTile(state.overworld, next)) {
         state.log.push(t('log.autoWalk.blocked'));
@@ -2386,16 +2393,16 @@ function playerTurn(action: Action): boolean {
     }
   }
 
-  if (action.kind === 'wait') {
+  if (action.kind === ActionKind.Wait) {
     state.log.push(t('log.wait'));
     return true;
   }
 
-  if (action.kind === 'pickup') {
+  if (action.kind === ActionKind.Pickup) {
     return pickupAtPlayer();
   }
 
-  if (action.kind === 'use') {
+  if (action.kind === ActionKind.Use) {
     if (state.mode === Mode.Overworld) {
       const entrance = getOverworldEntranceKind();
       if (entrance) {
@@ -2441,7 +2448,7 @@ function playerTurn(action: Action): boolean {
     }
   }
 
-  if (action.kind === 'move') {
+  if (action.kind === ActionKind.Move) {
     return tryMovePlayer(action.dx, action.dy);
   }
 
@@ -2499,8 +2506,8 @@ function tryMovePlayer(dx: number, dy: number): boolean {
     }
 
     const blocker: Entity | undefined = isBlockedByEntity(state.entities, Mode.Dungeon, dungeon.id, undefined, target);
-    if (blocker && blocker.kind === 'monster') {
-      attack(state.player, blocker);
+    if (blocker && blocker.kind === EntityKind.Monster) {
+      combat.attack(state.player, blocker);
       return true;
     }
 
@@ -2519,8 +2526,8 @@ function tryMovePlayer(dx: number, dy: number): boolean {
     }
 
     const blocker: Entity | undefined = isBlockedByEntity(state.entities, Mode.Town, undefined, town.id, target);
-    if (blocker && blocker.kind === 'monster') {
-      attack(state.player, blocker);
+    if (blocker && blocker.kind === EntityKind.Monster) {
+      combat.attack(state.player, blocker);
       return true;
     }
 
@@ -2571,86 +2578,6 @@ function tryMovePlayer(dx: number, dy: number): boolean {
   return moved;
 }
 
-/**
- * Returns the equipped weapon item for an entity.
- * @param entity The entity.
- * @returns The weapon item, or undefined.
- */
-function getEquippedWeaponItem(entity: Entity): Item | undefined {
-  const weaponId: string | undefined = entity.equipment.weaponItemId;
-  if (!weaponId) {
-    return undefined;
-  }
-  return state.items.find((x) => x.id === weaponId);
-}
-
-/**
- * Returns the equipped armor item for an entity.
- * @param entity The entity.
- * @returns The armor item, or undefined.
- */
-function getEquippedArmorItem(entity: Entity): Item | undefined {
-  const armorId: string | undefined = entity.equipment.armorItemId;
-  if (!armorId) {
-    return undefined;
-  }
-  return state.items.find((x) => x.id === armorId);
-}
-
-/**
- * Returns the total attack bonus from equipment.
- * @param entity The entity.
- * @returns The attack bonus.
- */
-function getEquippedAttackBonus(entity: Entity): number {
-  return getEquippedWeaponItem(entity)?.attackBonus ?? 0;
-}
-
-/**
- * Returns the total defense bonus from equipment.
- * @param entity The entity.
- * @returns The defense bonus.
- */
-function getEquippedDefenseBonus(entity: Entity): number {
-  return getEquippedArmorItem(entity)?.defenseBonus ?? 0;
-}
-
-/**
- * Returns the total crit chance from equipment.
- * @param entity The entity.
- * @returns The crit chance percent.
- */
-function getEquippedCritChance(entity: Entity): number {
-  return getEquippedWeaponItem(entity)?.critChance ?? 0;
-}
-
-/**
- * Returns the lifesteal percent from equipment.
- * @param entity The entity.
- * @returns The lifesteal percent.
- */
-function getEquippedLifesteal(entity: Entity): number {
-  return getEquippedWeaponItem(entity)?.lifesteal ?? 0;
-}
-
-/**
- * Returns the dodge chance percent from equipment.
- * @param entity The entity.
- * @returns The dodge chance percent.
- */
-function getEquippedDodgeChance(entity: Entity): number {
-  return getEquippedArmorItem(entity)?.dodgeChance ?? 0;
-}
-
-/**
- * Returns the thorns damage from equipment.
- * @param entity The entity.
- * @returns The thorns damage.
- */
-function getEquippedThorns(entity: Entity): number {
-  return getEquippedArmorItem(entity)?.thorns ?? 0;
-}
-
 type LevelUpGains = {
   hp: number;
   attack: number;
@@ -2660,280 +2587,313 @@ type LevelUpGains = {
   intellect: number;
 };
 
-/**
- * Applies level-up gains based on class and level.
- * @param player The player entity.
- * @param classType The player class.
- * @returns The gains applied.
- */
-function applyLevelUpGrowth(player: Entity, classType: CharacterClass): LevelUpGains {
-  ensureClassAttributes(player, classType);
+// Handles combat resolution and experience flow.
+class CombatEngine {
+  private state: GameState;
 
-  const level: number = player.level;
-  let gains: LevelUpGains;
+  public constructor(state: GameState) {
+    this.state = state;
+  }
 
-  switch (classType) {
-    case 'warrior': {
-      gains = {
-        hp: 6,
-        attack: 2,
-        defense: level % 2 === 0 ? 1 : 0,
-        strength: 2,
-        agility: level % 3 === 0 ? 1 : 0,
-        intellect: level % 4 === 0 ? 1 : 0
-      };
-      break;
-    }
-    case 'rogue': {
-      gains = {
-        hp: 4,
-        attack: 1,
-        defense: level % 3 === 0 ? 1 : 0,
-        strength: 1,
-        agility: 2,
-        intellect: level % 2 === 0 ? 1 : 0
-      };
-      break;
-    }
-    case 'mage':
-    default: {
-      gains = {
-        hp: 3,
-        attack: 1,
-        defense: level % 4 === 0 ? 1 : 0,
-        strength: level % 4 === 0 ? 1 : 0,
-        agility: level % 3 === 0 ? 1 : 0,
-        intellect: 2
-      };
-      break;
+  public setState(state: GameState): void {
+    this.state = state;
+  }
+
+  public getEquippedAttackBonus(entity: Entity): number {
+    return this.getEquippedWeaponItem(entity)?.attackBonus ?? 0;
+  }
+
+  public getEquippedDefenseBonus(entity: Entity): number {
+    return this.getEquippedArmorItem(entity)?.defenseBonus ?? 0;
+  }
+
+  public getEquippedCritChance(entity: Entity): number {
+    return this.getEquippedWeaponItem(entity)?.critChance ?? 0;
+  }
+
+  public getEquippedLifesteal(entity: Entity): number {
+    return this.getEquippedWeaponItem(entity)?.lifesteal ?? 0;
+  }
+
+  public getEquippedDodgeChance(entity: Entity): number {
+    return this.getEquippedArmorItem(entity)?.dodgeChance ?? 0;
+  }
+
+  public getEquippedThorns(entity: Entity): number {
+    return this.getEquippedArmorItem(entity)?.thorns ?? 0;
+  }
+
+  public xpToNextLevel(level: number): number {
+    return 25 + (level - 1) * 12;
+  }
+
+  public awardXp(amount: number): void {
+    const state: GameState = this.state;
+    state.player.xp += amount;
+    while (state.player.xp >= this.xpToNextLevel(state.player.level)) {
+      state.player.xp -= this.xpToNextLevel(state.player.level);
+      state.player.level += 1;
+      const gains: LevelUpGains = this.applyLevelUpGrowth(state.player, state.playerClass);
+      state.player.hp = state.player.maxHp;
+      state.log.push(t('log.levelUp', { level: state.player.level }));
+      canvasRenderer.triggerLevelUpEffect();
+      runFxRenderLoop(1200);
+      addStoryEvent(state, 'story.event.levelUp.title', 'story.event.levelUp.detail', { level: state.player.level });
+      const gainParts: string[] = [t('log.levelUp.gain.hp', { value: gains.hp }), t('log.levelUp.gain.atk', { value: gains.attack })];
+      if (gains.defense > 0) {
+        gainParts.push(t('log.levelUp.gain.def', { value: gains.defense }));
+      }
+      state.log.push(
+        t('log.levelUp.gains', {
+          gains: gainParts.join(', '),
+          str: state.player.strength ?? 0,
+          agi: state.player.agility ?? 0,
+          int: state.player.intellect ?? 0
+        })
+      );
     }
   }
 
-  player.maxHp += gains.hp;
-  player.baseAttack += gains.attack;
-  player.baseDefense += gains.defense;
-  player.strength = (player.strength ?? 0) + gains.strength;
-  player.agility = (player.agility ?? 0) + gains.agility;
-  player.intellect = (player.intellect ?? 0) + gains.intellect;
+  public attack(attacker: Entity, defender: Entity): void {
+    const state: GameState = this.state;
+    let atk: number = attacker.baseAttack + this.getEquippedAttackBonus(attacker);
+    let def: number = defender.baseDefense + this.getEquippedDefenseBonus(defender);
+    const originalDef: number = def;
 
-  return gains;
-}
+    let damageMultiplier: number = 1;
+    const suffixParts: string[] = [];
+    let playerVerb: string = t('combat.verb.hit');
+    let critChance: number = 0;
 
-/**
- * Awards XP and handles level-ups.
- * @param amount The XP amount.
- */
-function awardXp(amount: number): void {
-  state.player.xp += amount;
-  while (state.player.xp >= xpToNextLevel(state.player.level)) {
-    state.player.xp -= xpToNextLevel(state.player.level);
-    state.player.level += 1;
-    const gains: LevelUpGains = applyLevelUpGrowth(state.player, state.playerClass);
-    state.player.hp = state.player.maxHp;
-    state.log.push(t('log.levelUp', { level: state.player.level }));
-    canvasRenderer.triggerLevelUpEffect();
-    runFxRenderLoop(1200);
-    addStoryEvent(state, 'story.event.levelUp.title', 'story.event.levelUp.detail', { level: state.player.level });
-    const gainParts: string[] = [t('log.levelUp.gain.hp', { value: gains.hp }), t('log.levelUp.gain.atk', { value: gains.attack })];
-    if (gains.defense > 0) {
-      gainParts.push(t('log.levelUp.gain.def', { value: gains.defense }));
+    if (defender.kind === EntityKind.Player) {
+      const dodgeChance: number = Math.min(50, this.getEquippedDodgeChance(defender));
+      if (dodgeChance > 0 && state.rng.nextInt(0, 100) < dodgeChance) {
+        state.log.push(t('log.combat.dodge'));
+        return;
+      }
     }
-    state.log.push(
-      t('log.levelUp.gains', {
-        gains: gainParts.join(', '),
-        str: state.player.strength ?? 0,
-        agi: state.player.agility ?? 0,
-        int: state.player.intellect ?? 0
-      })
-    );
-  }
-}
 
-/**
- * Returns the XP required for the next level.
- * @param level The current level.
- * @returns The XP requirement.
- */
-function xpToNextLevel(level: number): number {
-  return 25 + (level - 1) * 12;
-}
+    if (attacker.kind === EntityKind.Player) {
+      const classType: CharacterClass = state.playerClass;
+      ensureClassAttributes(attacker, classType);
 
-/**
- * Resolves an attack from attacker to defender.
- * @param attacker The attacking entity.
- * @param defender The defending entity.
- */
-function attack(attacker: Entity, defender: Entity): void {
-  let atk: number = attacker.baseAttack + getEquippedAttackBonus(attacker);
-  let def: number = defender.baseDefense + getEquippedDefenseBonus(defender);
-  const originalDef: number = def;
+      switch (classType) {
+        case 'warrior': {
+          const strength: number = attacker.strength ?? 0;
+          atk += Math.floor(strength / 2);
+          playerVerb = t('combat.verb.cleave');
+          break;
+        }
+        case 'rogue': {
+          const agility: number = attacker.agility ?? 0;
+          atk += Math.floor(agility / 2);
+          critChance = Math.min(60, 10 + agility * 4);
+          playerVerb = t('combat.verb.stab');
+          break;
+        }
+        case 'mage':
+        default: {
+          const intellect: number = attacker.intellect ?? 0;
+          atk += Math.floor(intellect / 2);
+          def = Math.floor(def * 0.5);
+          if (def < originalDef) {
+            suffixParts.push(t('combat.suffix.armorMelts'));
+          }
+          playerVerb = t('combat.verb.blast');
+          break;
+        }
+      }
 
-  let damageMultiplier: number = 1;
-  const suffixParts: string[] = [];
-  let playerVerb: string = t('combat.verb.hit');
-  let critChance: number = 0;
+      critChance = Math.min(75, critChance + this.getEquippedCritChance(attacker));
+      if (critChance > 0 && state.rng.nextInt(0, 100) < critChance) {
+        damageMultiplier = 2;
+        if (playerVerb === t('combat.verb.stab')) {
+          playerVerb = t('combat.verb.backstab');
+        }
+        suffixParts.push(t('combat.suffix.critical'));
+      }
+    }
 
-  if (defender.kind === 'player') {
-    const dodgeChance: number = Math.min(50, getEquippedDodgeChance(defender));
-    if (dodgeChance > 0 && state.rng.nextInt(0, 100) < dodgeChance) {
-      state.log.push(t('log.combat.dodge'));
-      return;
+    const roll: number = state.rng.nextInt(0, 5);
+    const raw: number = atk + roll;
+    let dmg: number = Math.max(1, raw - def);
+    dmg = Math.max(1, Math.floor(dmg * damageMultiplier));
+
+    defender.hp -= dmg;
+
+    if (attacker.kind === EntityKind.Player) {
+      const lifesteal: number = Math.min(50, this.getEquippedLifesteal(attacker));
+      if (lifesteal > 0) {
+        const heal: number = Math.min(attacker.maxHp - attacker.hp, Math.floor((dmg * lifesteal) / 100));
+        if (heal > 0) {
+          attacker.hp += heal;
+          state.log.push(t('log.combat.lifesteal', { amount: heal }));
+        }
+      }
+    }
+
+    if (defender.kind === EntityKind.Player && attacker.kind === EntityKind.Monster) {
+      const thorns: number = Math.min(20, this.getEquippedThorns(defender));
+      if (thorns > 0) {
+        attacker.hp -= thorns;
+        state.log.push(t('log.combat.thorns', { name: attacker.name, amount: thorns }));
+        if (attacker.hp <= 0) {
+          state.log.push(t('log.combat.dies', { name: attacker.name }));
+          const xp: number = 6 + (attacker.baseAttack + attacker.baseDefense);
+          const gold: number = 2 + state.rng.nextInt(0, 4);
+          state.player.gold += gold;
+          state.log.push(t('log.combat.loot', { xp, gold }));
+          this.awardXp(xp);
+
+          const currentDepth: number = state.dungeonStack[state.dungeonStack.length - 1]?.depth ?? 0;
+          if (attacker.isBoss) {
+            dropBossLoot(state, attacker);
+          }
+          recordKillForQuests(state, currentDepth, attacker.name, !!attacker.isBoss);
+        }
+      }
+    }
+
+    const defenderHpText: string = `(${Math.max(0, defender.hp)}/${defender.maxHp})`;
+    const suffix: string = suffixParts.length > 0 ? ` (${suffixParts.join(', ')})` : '';
+    if (attacker.kind === EntityKind.Player) {
+      state.log.push(
+        t('log.combat.player', {
+          verb: playerVerb,
+          target: defender.name,
+          dmg,
+          suffix,
+          hp: defenderHpText
+        })
+      );
+    } else if (defender.kind === EntityKind.Player) {
+      state.log.push(t('log.combat.monsterHitsYou', { name: attacker.name, dmg, hp: defenderHpText }));
+    } else {
+      state.log.push(
+        t('log.combat.monsterHitsMonster', {
+          attacker: attacker.name,
+          defender: defender.name,
+          dmg,
+          hp: defenderHpText
+        })
+      );
+    }
+
+    if (defender.hp <= 0) {
+      if (defender.kind === EntityKind.Player) {
+        state.log.push(t('log.combat.playerDeath'));
+      } else {
+        state.log.push(t('log.combat.dies', { name: defender.name }));
+      }
+
+      if (attacker.kind === EntityKind.Player) {
+        const xp: number = 6 + (defender.baseAttack + defender.baseDefense);
+        const gold: number = 2 + state.rng.nextInt(0, 4);
+        state.player.gold += gold;
+        state.log.push(t('log.combat.loot', { xp, gold }));
+        this.awardXp(xp);
+
+        const currentDepth: number = state.dungeonStack[state.dungeonStack.length - 1]?.depth ?? 0;
+        if (defender.isBoss) {
+          dropBossLoot(state, defender);
+        }
+        recordKillForQuests(state, currentDepth, defender.name, !!defender.isBoss);
+      }
     }
   }
 
-  if (attacker.kind === 'player') {
-    const classType: CharacterClass = state.playerClass;
-    ensureClassAttributes(attacker, classType);
+  public wraithDrain(attacker: Entity, defender: Entity): void {
+    const state: GameState = this.state;
+    const def: number = defender.baseDefense + this.getEquippedDefenseBonus(defender);
+    const base: number = 2 + Math.floor(attacker.baseAttack / 2) + state.rng.nextInt(0, 3);
+    const dmg: number = Math.max(1, base - Math.floor(def * 0.3));
+    defender.hp -= dmg;
+
+    const heal: number = Math.min(attacker.maxHp - attacker.hp, Math.floor(dmg * 0.6));
+    if (heal > 0) {
+      attacker.hp += heal;
+    }
+
+    const defenderHpText: string = `(${Math.max(0, defender.hp)}/${defender.maxHp})`;
+    const healText: string = heal > 0 ? ` ${t('log.wraith.heal', { name: monsterName('wraith'), amount: heal })}` : '';
+    state.log.push(t('log.wraith.drain', { name: monsterName('wraith'), dmg, hp: defenderHpText, healText }));
+
+    if (defender.hp <= 0) {
+      state.log.push(t('log.combat.playerDeath'));
+    }
+  }
+
+  private getEquippedWeaponItem(entity: Entity): Item | undefined {
+    const weaponId: string | undefined = entity.equipment.weaponItemId;
+    if (!weaponId) {
+      return undefined;
+    }
+    return this.state.items.find((item) => item.id === weaponId);
+  }
+
+  private getEquippedArmorItem(entity: Entity): Item | undefined {
+    const armorId: string | undefined = entity.equipment.armorItemId;
+    if (!armorId) {
+      return undefined;
+    }
+    return this.state.items.find((item) => item.id === armorId);
+  }
+
+  private applyLevelUpGrowth(player: Entity, classType: CharacterClass): LevelUpGains {
+    ensureClassAttributes(player, classType);
+
+    const level: number = player.level;
+    let gains: LevelUpGains;
 
     switch (classType) {
       case 'warrior': {
-        const strength: number = attacker.strength ?? 0;
-        atk += Math.floor(strength / 2);
-        playerVerb = t('combat.verb.cleave');
+        gains = {
+          hp: 6,
+          attack: 2,
+          defense: level % 2 === 0 ? 1 : 0,
+          strength: 2,
+          agility: level % 3 === 0 ? 1 : 0,
+          intellect: level % 4 === 0 ? 1 : 0
+        };
         break;
       }
       case 'rogue': {
-        const agility: number = attacker.agility ?? 0;
-        atk += Math.floor(agility / 2);
-        critChance = Math.min(60, 10 + agility * 4);
-        playerVerb = t('combat.verb.stab');
+        gains = {
+          hp: 4,
+          attack: 1,
+          defense: level % 3 === 0 ? 1 : 0,
+          strength: 1,
+          agility: 2,
+          intellect: level % 2 === 0 ? 1 : 0
+        };
         break;
       }
       case 'mage':
       default: {
-        const intellect: number = attacker.intellect ?? 0;
-        atk += Math.floor(intellect / 2);
-        def = Math.floor(def * 0.5);
-        if (def < originalDef) {
-          suffixParts.push(t('combat.suffix.armorMelts'));
-        }
-        playerVerb = t('combat.verb.blast');
+        gains = {
+          hp: 3,
+          attack: 1,
+          defense: level % 4 === 0 ? 1 : 0,
+          strength: level % 4 === 0 ? 1 : 0,
+          agility: level % 3 === 0 ? 1 : 0,
+          intellect: 2
+        };
         break;
       }
     }
 
-    critChance = Math.min(75, critChance + getEquippedCritChance(attacker));
-    if (critChance > 0 && state.rng.nextInt(0, 100) < critChance) {
-      damageMultiplier = 2;
-      if (playerVerb === t('combat.verb.stab')) {
-        playerVerb = t('combat.verb.backstab');
-      }
-      suffixParts.push(t('combat.suffix.critical'));
-    }
-  }
+    player.maxHp += gains.hp;
+    player.baseAttack += gains.attack;
+    player.baseDefense += gains.defense;
+    player.strength = (player.strength ?? 0) + gains.strength;
+    player.agility = (player.agility ?? 0) + gains.agility;
+    player.intellect = (player.intellect ?? 0) + gains.intellect;
 
-  const roll: number = state.rng.nextInt(0, 5);
-  const raw: number = atk + roll;
-  let dmg: number = Math.max(1, raw - def);
-  dmg = Math.max(1, Math.floor(dmg * damageMultiplier));
-
-  defender.hp -= dmg;
-
-  if (attacker.kind === 'player') {
-    const lifesteal: number = Math.min(50, getEquippedLifesteal(attacker));
-    if (lifesteal > 0) {
-      const heal: number = Math.min(attacker.maxHp - attacker.hp, Math.floor((dmg * lifesteal) / 100));
-      if (heal > 0) {
-        attacker.hp += heal;
-        state.log.push(t('log.combat.lifesteal', { amount: heal }));
-      }
-    }
-  }
-
-  if (defender.kind === 'player' && attacker.kind === 'monster') {
-    const thorns: number = Math.min(20, getEquippedThorns(defender));
-    if (thorns > 0) {
-      attacker.hp -= thorns;
-      state.log.push(t('log.combat.thorns', { name: attacker.name, amount: thorns }));
-      if (attacker.hp <= 0) {
-        state.log.push(t('log.combat.dies', { name: attacker.name }));
-        const xp: number = 6 + (attacker.baseAttack + attacker.baseDefense);
-        const gold: number = 2 + state.rng.nextInt(0, 4);
-        state.player.gold += gold;
-        state.log.push(t('log.combat.loot', { xp, gold }));
-        awardXp(xp);
-
-        const currentDepth: number = state.dungeonStack[state.dungeonStack.length - 1]?.depth ?? 0;
-        if (attacker.isBoss) {
-          dropBossLoot(state, attacker);
-        }
-        recordKillForQuests(state, currentDepth, attacker.name, !!attacker.isBoss);
-      }
-    }
-  }
-
-  const defenderHpText: string = `(${Math.max(0, defender.hp)}/${defender.maxHp})`;
-  const suffix: string = suffixParts.length > 0 ? ` (${suffixParts.join(', ')})` : '';
-  if (attacker.kind === 'player') {
-    state.log.push(
-      t('log.combat.player', {
-        verb: playerVerb,
-        target: defender.name,
-        dmg,
-        suffix,
-        hp: defenderHpText
-      })
-    );
-  } else if (defender.kind === 'player') {
-    state.log.push(t('log.combat.monsterHitsYou', { name: attacker.name, dmg, hp: defenderHpText }));
-  } else {
-    state.log.push(
-      t('log.combat.monsterHitsMonster', {
-        attacker: attacker.name,
-        defender: defender.name,
-        dmg,
-        hp: defenderHpText
-      })
-    );
-  }
-
-  if (defender.hp <= 0) {
-    if (defender.kind === 'player') {
-      state.log.push(t('log.combat.playerDeath'));
-    } else {
-      state.log.push(t('log.combat.dies', { name: defender.name }));
-    }
-
-    if (attacker.kind === 'player') {
-      const xp: number = 6 + (defender.baseAttack + defender.baseDefense);
-      const gold: number = 2 + state.rng.nextInt(0, 4);
-      state.player.gold += gold;
-      state.log.push(t('log.combat.loot', { xp, gold }));
-      awardXp(xp);
-
-      const currentDepth: number = state.dungeonStack[state.dungeonStack.length - 1]?.depth ?? 0;
-      if (defender.isBoss) {
-        dropBossLoot(state, defender);
-      }
-      recordKillForQuests(state, currentDepth, defender.name, !!defender.isBoss);
-    }
+    return gains;
   }
 }
 
-/**
- * Executes the wraith special drain attack.
- * @param attacker The attacking entity.
- * @param defender The defending entity.
- */
-function wraithDrain(attacker: Entity, defender: Entity): void {
-  const def: number = defender.baseDefense + getEquippedDefenseBonus(defender);
-  const base: number = 2 + Math.floor(attacker.baseAttack / 2) + state.rng.nextInt(0, 3);
-  const dmg: number = Math.max(1, base - Math.floor(def * 0.3));
-  defender.hp -= dmg;
-
-  const heal: number = Math.min(attacker.maxHp - attacker.hp, Math.floor(dmg * 0.6));
-  if (heal > 0) {
-    attacker.hp += heal;
-  }
-
-  const defenderHpText: string = `(${Math.max(0, defender.hp)}/${defender.maxHp})`;
-  const healText: string = heal > 0 ? ` ${t('log.wraith.heal', { name: monsterName('wraith'), amount: heal })}` : '';
-  state.log.push(t('log.wraith.drain', { name: monsterName('wraith'), dmg, hp: defenderHpText, healText }));
-
-  if (defender.hp <= 0) {
-    state.log.push(t('log.combat.playerDeath'));
-  }
-}
+const combat: CombatEngine = new CombatEngine(state);
 
 /**
  * Executes the monsters' turn in a dungeon.
@@ -2951,12 +2911,15 @@ function monstersTurn(): void {
   let visible: Set<string> | undefined;
 
   if (state.useFov) {
-    decayVisibilityToSeen(dungeon);
-    visible = computeDungeonFov(dungeon, state.player.pos, 10);
+    const fov: FieldOfView = new FieldOfView(dungeon);
+    fov.decayVisibility();
+    visible = fov.compute(state.player.pos, 10);
   }
 
+  const ai: MonsterAI = new MonsterAI(dungeon, state.entities);
+
   for (const e of state.entities) {
-    if (e.kind !== 'monster') {
+    if (e.kind !== EntityKind.Monster) {
       continue;
     }
     if (e.hp <= 0) {
@@ -2980,7 +2943,7 @@ function monstersTurn(): void {
     const chaseOk: boolean = !state.useFov || (visible ? visible.has(`${e.pos.x},${e.pos.y}`) : true);
     if (dist <= 1) {
       const hpBefore: number = state.player.hp;
-      attack(e, state.player);
+      combat.attack(e, state.player);
       if (state.player.hp < hpBefore && state.player.hp > 0) {
         maybeApplyPoisonFromAttacker(e);
       }
@@ -2988,12 +2951,12 @@ function monstersTurn(): void {
     }
 
     if (e.glyph === 'w' && (e.specialCooldown ?? 0) === 0 && dist <= 4 && chaseOk && state.rng.nextInt(0, 100) < 20) {
-      wraithDrain(e, state.player);
+      combat.wraithDrain(e, state.player);
       e.specialCooldown = 3;
       continue;
     }
     if (dist <= 12 && chaseOk) {
-      const next: Point | undefined = nextMonsterStep(e, state.player, dungeon, state.entities);
+      const next: Point | undefined = ai.nextStep(e, state.player);
       if (!next) {
         continue;
       }
@@ -3016,7 +2979,7 @@ function monstersTurn(): void {
  * @param entranceKind The entrance kind.
  */
 function enterDungeonAt(worldPos: Point, entranceKind: 'dungeon' | 'cave'): void {
-  const layout: DungeonLayout = entranceKind === 'cave' ? 'caves' : 'rooms';
+  const layout: DungeonLayout = entranceKind === 'cave' ? DungeonLayout.Caves : DungeonLayout.Rooms;
   const baseId: string =
     entranceKind === 'cave'
       ? caveBaseIdFromWorldPos(state.worldSeed, worldPos.x, worldPos.y)
@@ -3131,13 +3094,10 @@ function setDestination(dest: Point): void {
     return;
   }
 
-  const path = aStar(
-    state.player.pos,
-    dest,
-    (p: Point) => canEnterOverworldTile(state.overworld, p),
-    (_p: Point) => false,
-    20000
-  );
+  const path = overworldNavigator.findPath(state.player.pos, dest, {
+    preferRoads: true,
+    maxNodes: 20000
+  });
 
   if (!path || path.length < 2) {
     state.log.push(t('log.path.none'));
@@ -3215,17 +3175,18 @@ function render(): void {
   renderPill.textContent = t('ui.render.pill', { fov: state.useFov ? t('ui.fov.on') : t('ui.fov.off') });
 
   if (state.mode === Mode.Dungeon && dungeon && state.useFov) {
-    decayVisibilityToSeen(dungeon);
-    computeDungeonFov(dungeon, state.player.pos, 10);
+    const fov: FieldOfView = new FieldOfView(dungeon);
+    fov.decayVisibility();
+    fov.compute(state.player.pos, 10);
   }
 
   const classInfo: ClassConfig = CLASS_CONFIG[state.playerClass];
-  const atk: number = state.player.baseAttack + getEquippedAttackBonus(state.player);
-  const def: number = state.player.baseDefense + getEquippedDefenseBonus(state.player);
+  const atk: number = state.player.baseAttack + combat.getEquippedAttackBonus(state.player);
+  const def: number = state.player.baseDefense + combat.getEquippedDefenseBonus(state.player);
   const str: number = state.player.strength ?? 0;
   const agi: number = state.player.agility ?? 0;
   const intl: number = state.player.intellect ?? 0;
-  const nextXp: number = xpToNextLevel(state.player.level);
+  const nextXp: number = combat.xpToNextLevel(state.player.level);
   const hpRatio: number = Math.max(0, Math.min(1, state.player.hp / Math.max(1, state.player.maxHp)));
   const xpRatio: number = Math.max(0, Math.min(1, state.player.xp / Math.max(1, nextXp)));
 
@@ -3328,7 +3289,7 @@ function render(): void {
     },
     view.w,
     view.h,
-    state.rendererMode === 'isometric' ? 'isometric' : 'canvas'
+    state.rendererMode
   );
 }
 
@@ -3711,7 +3672,7 @@ function turnInQuest(questId: string): void {
 
   q.turnedIn = true;
   state.player.gold += q.rewardGold;
-  awardXp(q.rewardXp);
+  combat.awardXp(q.rewardXp);
   if (q.rewardItemId) {
     const rewardItem: Item | undefined = state.items.find((it) => it.id === q.rewardItemId);
     if (rewardItem) {
@@ -3768,63 +3729,63 @@ function escapeHtml(s: string): string {
  */
 function keyToAction(e: KeyboardEvent): Action | undefined {
   if (e.key === 'r' || e.key === 'R') {
-    return { kind: 'toggleRenderer' };
+    return { kind: ActionKind.ToggleRenderer };
   }
   if (e.key === 'f' || e.key === 'F') {
-    return { kind: 'toggleFov' };
+    return { kind: ActionKind.ToggleFov };
   }
   if (e.key === '?') {
-    return { kind: 'help' };
+    return { kind: ActionKind.Help };
   }
 
   if (e.key === 'p' || e.key === 'P') {
-    return { kind: 'save' };
+    return { kind: ActionKind.Save };
   }
   if (e.key === 'o' || e.key === 'O') {
-    return { kind: 'load' };
+    return { kind: ActionKind.Load };
   }
 
   if (e.key === 'i' || e.key === 'I') {
-    return { kind: 'toggleInventory' };
+    return { kind: ActionKind.ToggleInventory };
   }
   if (e.key === 'b' || e.key === 'B') {
-    return { kind: 'toggleShop' };
+    return { kind: ActionKind.ToggleShop };
   }
   if (e.key === 'q' || e.key === 'Q') {
-    return { kind: 'toggleQuest' };
+    return { kind: ActionKind.ToggleQuest };
   }
   if (e.key === 'h' || e.key === 'H') {
-    return { kind: 'toggleStory' };
+    return { kind: ActionKind.ToggleStory };
   }
   if (e.key === 'm' || e.key === 'M') {
-    return { kind: 'toggleMap' };
+    return { kind: ActionKind.ToggleMap };
   }
 
   if (e.key === 'g' || e.key === 'G' || e.key === ',') {
-    return { kind: 'pickup' };
+    return { kind: ActionKind.Pickup };
   }
 
   if (e.key === 'Enter') {
-    return { kind: 'use' };
+    return { kind: ActionKind.Use };
   }
   if (e.key === 'c' || e.key === 'C') {
-    return { kind: 'cancelAuto' };
+    return { kind: ActionKind.CancelAuto };
   }
   if (e.key === ' ') {
-    return { kind: 'wait' };
+    return { kind: ActionKind.Wait };
   }
 
   if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
-    return { kind: 'move', dx: 0, dy: -1 * (e.shiftKey ? 5 : 1) };
+    return { kind: ActionKind.Move, dx: 0, dy: -1 * (e.shiftKey ? 5 : 1) };
   }
   if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
-    return { kind: 'move', dx: 0, dy: 1 * (e.shiftKey ? 5 : 1) };
+    return { kind: ActionKind.Move, dx: 0, dy: 1 * (e.shiftKey ? 5 : 1) };
   }
   if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-    return { kind: 'move', dx: -1 * (e.shiftKey ? 5 : 1), dy: 0 };
+    return { kind: ActionKind.Move, dx: -1 * (e.shiftKey ? 5 : 1), dy: 0 };
   }
   if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-    return { kind: 'move', dx: 1 * (e.shiftKey ? 5 : 1), dy: 0 };
+    return { kind: ActionKind.Move, dx: 1 * (e.shiftKey ? 5 : 1), dy: 0 };
   }
 
   return undefined;
@@ -3849,7 +3810,7 @@ window.addEventListener('keydown', (e: KeyboardEvent) => {
 });
 
 btnCanvas.addEventListener('click', () => {
-  state.rendererMode = 'canvas';
+  state.rendererMode = PixiRenderMode.Canvas;
   syncRendererUi();
   render();
 });
@@ -3888,7 +3849,7 @@ btnStory.addEventListener('click', () => {
 });
 
 btnMap.addEventListener('click', () => {
-  handleAction({ kind: 'toggleMap' });
+  handleAction({ kind: ActionKind.ToggleMap });
 });
 
 classButtons.forEach((btn) => {
@@ -4038,8 +3999,8 @@ function applyLoadedSave(data: SaveDataV3): boolean {
     return false;
   }
 
-  const loadedClass: CharacterClass = data.playerClass ?? player.classType ?? 'warrior';
-  const loadedGender: Gender = data.playerGender ?? player.gender ?? 'female';
+  const loadedClass: CharacterClass = data.playerClass ?? player.classType ?? CharacterClass.Warrior;
+  const loadedGender: Gender = data.playerGender ?? player.gender ?? Gender.Female;
   ensureClassAttributes(player, loadedClass);
   player.gender = loadedGender;
 
@@ -4073,6 +4034,8 @@ function applyLoadedSave(data: SaveDataV3): boolean {
     autoPath: undefined,
     log: new MessageLog(160)
   };
+  overworldNavigator = new OverworldNavigator(state.overworld);
+  combat.setState(state);
 
   if (resolvedMode === Mode.Overworld && player.mapRef.kind === Mode.Town) {
     player.mapRef = { kind: Mode.Overworld };
@@ -4218,7 +4181,7 @@ function loadSaveFromModal(): void {
  * @returns The dungeon layout.
  */
 function layoutFromBaseId(baseId: string): DungeonLayout {
-  return baseId.startsWith('cave_') ? 'caves' : 'rooms';
+  return baseId.startsWith('cave_') ? DungeonLayout.Caves : DungeonLayout.Rooms;
 }
 
 /**

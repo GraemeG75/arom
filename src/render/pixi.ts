@@ -23,7 +23,7 @@ type PixiRenderContext = {
 type IsoMode = Mode.Overworld | Mode.Dungeon | Mode.Town;
 type IsoTile = OverworldTile | DungeonTile | TownTile;
 
-enum PixiRenderMode {
+export enum PixiRenderMode {
   Canvas = 'canvas',
   Isometric = 'isometric'
 }
