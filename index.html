@@ -191,12 +191,12 @@
       }
       #log {
         margin-top: 10px;
-        border-top: 1px solid var(--panel-edge);
+        `
         padding-top: 10px;
         max-height: 220px;
         overflow: auto;
       }
-      #todo {
+      #todo, #features {
         margin-top: 10px;
         border-top: 1px solid var(--panel-edge);
         padding-top: 10px;
@@ -715,6 +715,12 @@
         color: rgba(248, 249, 250, 0.6);
         font-size: 0.875rem;
       }
+      .todoListStyle {
+        padding-left: 12px;
+      }
+      .featuresListStyle {
+        padding-left: 12px;
+      }
     </style>
   </head>
   <body>
@@ -834,7 +840,7 @@
           </div>
           <div
             id="todoList"
-            class="small"></div>
+            class="small todoListStyle"></div>
         </div>
 
         <div id="features">
@@ -845,8 +851,7 @@
           </div>
           <div
             id="featuresList"
-            class="small"
-            style="padding-left: 12px"></div>
+            class="small featuresListStyle"></div>
         </div>
       </div>
     </div>
