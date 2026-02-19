@@ -877,9 +877,9 @@ const supportLeadEl: HTMLElement = document.getElementById('supportLead')!;
 const supportLinkEl: HTMLAnchorElement = document.getElementById('supportLink') as HTMLAnchorElement;
 const supportTailEl: HTMLElement = document.getElementById('supportTail')!;
 const overworldHintEl: HTMLElement = document.getElementById('overworldHint')!;
+const viewSwitchLabel: HTMLElement = document.getElementById('viewSwitchLabel')!;
 const menuActionsLabel: HTMLElement = document.getElementById('menuActionsLabel')!;
 const menuPanelsLabel: HTMLElement = document.getElementById('menuPanelsLabel')!;
-const menuRenderLabel: HTMLElement = document.getElementById('menuRenderLabel')!;
 const nameLabel: HTMLElement = document.getElementById('nameLabel')!;
 const genderLabel: HTMLElement = document.getElementById('genderLabel')!;
 const btnCanvas: HTMLButtonElement = document.getElementById('btnCanvas') as HTMLButtonElement;
@@ -968,7 +968,7 @@ function applyStaticI18n(): void {
 
   menuActionsLabel.textContent = t('ui.menu.actions');
   menuPanelsLabel.textContent = t('ui.menu.panels');
-  menuRenderLabel.textContent = t('ui.menu.render');
+  viewSwitchLabel.textContent = t('ui.menu.render');
   nameLabel.textContent = t('ui.name.label');
   genderLabel.textContent = t('ui.gender.label');
   todoTitleEl.textContent = t('ui.todo.title');

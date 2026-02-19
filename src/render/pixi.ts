@@ -65,6 +65,7 @@ export class PixiRenderer {
   private tileSprites: Sprite[];
   private viewWidth: number;
   private viewHeight: number;
+  private activeRenderMode: PixiRenderMode;
   private initialized: boolean;
   private pendingRender?: { ctx: PixiRenderContext; viewWidth: number; viewHeight: number; renderMode: PixiRenderMode };
   private lastRender?: { ctx: PixiRenderContext; viewWidth: number; viewHeight: number; renderMode: PixiRenderMode };
@@ -87,6 +88,7 @@ export class PixiRenderer {
     this.tileSprites = [];
     this.viewWidth = 0;
     this.viewHeight = 0;
+    this.activeRenderMode = PixiRenderMode.Canvas;
     this.initialized = false;
     this.fogOffsetX = 0;
     this.fogOffsetY = 0;
@@ -166,10 +168,17 @@ export class PixiRenderer {
       this.rebuildView(viewWidth, viewHeight);
     }
 
+    if (renderMode === PixiRenderMode.Canvas && this.activeRenderMode === PixiRenderMode.Isometric) {
+      this.rebuildView(viewWidth, viewHeight);
+    }
+
     if (renderMode === PixiRenderMode.Isometric) {
+      this.activeRenderMode = PixiRenderMode.Isometric;
       this.renderIsometric(ctx, viewWidth, viewHeight);
       return;
     }
+
+    this.activeRenderMode = PixiRenderMode.Canvas;
 
     this.hideLevelUpEffect();
 
